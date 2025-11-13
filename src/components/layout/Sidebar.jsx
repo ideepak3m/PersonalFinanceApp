@@ -1,9 +1,9 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { DollarSign, Upload, TrendingUp, BookOpen, MessageSquare } from 'lucide-react';
+import { DollarSign, Upload, TrendingUp, BookOpen, MessageSquare, Settings } from 'lucide-react';
 
 const iconMap = {
-    DollarSign, Upload, TrendingUp, BookOpen, MessageSquare
+    DollarSign, Upload, TrendingUp, BookOpen, MessageSquare, Settings
 };
 
 export const Sidebar = () => {
@@ -50,6 +50,23 @@ export const Sidebar = () => {
                 })}
             </nav>
 
+            {/* Settings at bottom */}
+            <div className="p-4 border-t border-gray-700">
+                <NavLink
+                    to="/settings"
+                    className={({ isActive }) =>
+                        `w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive
+                            ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                            : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                        }`
+                    }
+                >
+                    <Settings className="w-5 h-5" />
+                    <span className="font-medium">Settings</span>
+                </NavLink>
+            </div>
+
+            {/* User Profile */}
             <div className="p-4 border-t border-gray-700">
                 <div className="flex items-center gap-3 px-2">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold">

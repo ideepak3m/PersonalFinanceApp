@@ -31,5 +31,6 @@ export const NAV_ITEMS = [
     { id: 'transactions', label: 'Transactions', icon: 'Upload' },
     { id: 'analytics', label: 'Analytics', icon: 'TrendingUp' },
     { id: 'knowledge', label: 'Knowledge', icon: 'BookOpen' },
-    { id: 'ai-advisor', label: 'AI Advisor', icon: 'MessageSquare' }
+    { id: 'ai-advisor', label: 'AI Advisor', icon: 'MessageSquare' },
+    { id: 'settings', label: 'Settings', icon: 'Settings' }
 ];

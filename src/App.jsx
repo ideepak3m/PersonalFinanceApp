@@ -8,6 +8,7 @@ import { Transactions } from './pages/Transactions';
 import { Analytics } from './pages/Analytics';
 import { Knowledge } from './pages/Knowledge';
 import { AIAdvisor } from './pages/AIAdvisor';
+import { Settings } from './pages/Settings';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/knowledge" element={<Knowledge />} />
                 <Route path="/ai-advisor" element={<AIAdvisor />} />
+                <Route path="/settings" element={<Settings />} />
               </Routes>
             </main>
           </div>
