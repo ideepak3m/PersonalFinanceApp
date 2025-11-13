@@ -1,12 +1,16 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { DollarSign, Upload, TrendingUp, BookOpen, MessageSquare, Settings } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { DollarSign, Upload, TrendingUp, BookOpen, MessageSquare, Settings, LogOut } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const iconMap = {
     DollarSign, Upload, TrendingUp, BookOpen, MessageSquare, Settings
 };
 
 export const Sidebar = () => {
+    const { user, signOut } = useAuth();
+    const navigate = useNavigate();
+    
     const navItems = [
         { path: '/', label: 'Accounts', icon: 'DollarSign' },
         { path: '/transactions', label: 'Transactions', icon: 'Upload' },
@@ -68,14 +72,30 @@ export const Sidebar = () => {
 
             {/* User Profile */}
             <div className="p-4 border-t border-gray-700">
-                <div className="flex items-center gap-3 px-2">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold">
-                        D
+                <div className="flex items-center justify-between px-2">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold">
+                            {user?.email?.[0]?.toUpperCase() || 'U'}
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-white">
+                                {user?.user_metadata?.full_name || 'User'}
+                            </p>
+                            <p className="text-xs text-gray-400 truncate max-w-[120px]">
+                                {user?.email || 'user@email.com'}
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-sm font-semibold text-white">Demo User</p>
-                        <p className="text-xs text-gray-400">demo@finance.app</p>
-                    </div>
+                    <button
+                        onClick={async () => {
+                            await signOut();
+                            navigate('/login');
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-all"
+                        title="Logout"
+                    >
+                        <LogOut className="w-5 h-5" />
+                    </button>
                 </div>
             </div>
         </div>
