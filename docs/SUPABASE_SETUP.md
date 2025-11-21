@@ -269,7 +269,7 @@ Create a file: `.env.local` in your project root:
 
 ```env
 VITE_SUPABASE_URL=your_project_url_here
-VITE_SUPABASE_ANON_KEY=your_anon_key_here
+VITE_SUPABASE_PK_KEY=your_anon_key_here
 ```
 
 **Replace with your actual values from Step 2!**

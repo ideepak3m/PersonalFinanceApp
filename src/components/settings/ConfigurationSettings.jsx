@@ -1,24 +1,38 @@
+
 import React, { useState, useEffect } from 'react';
 import { Save } from 'lucide-react';
+import { supabaseSettingsDB } from '../../services/supabaseDatabase';
+
+const DEFAULT_CONFIG = {
+    appName: 'Personal Finance',
+    currency: 'USD',
+    dateFormat: 'MM/DD/YYYY',
+    fiscalYearStart: 'january',
+    defaultCountry: 'canada',
+    enableNotifications: true,
+    enableAI: true,
+    theme: 'light'
+};
 
 export const ConfigurationSettings = () => {
-    const [config, setConfig] = useState({
-        appName: 'Personal Finance',
-        currency: 'USD',
-        dateFormat: 'MM/DD/YYYY',
-        fiscalYearStart: 'january',
-        defaultCountry: 'canada',
-        enableNotifications: true,
-        enableAI: true,
-        theme: 'light'
-    });
+    const [config, setConfig] = useState(DEFAULT_CONFIG);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        // Load configuration from localStorage
-        const saved = localStorage.getItem('appConfiguration');
-        if (saved) {
-            setConfig(JSON.parse(saved));
-        }
+        const fetchConfig = async () => {
+            setLoading(true);
+            try {
+                const data = await supabaseSettingsDB.getConfiguration();
+                if (data) {
+                    setConfig(data);
+                }
+            } catch (e) {
+                // fallback to default
+            }
+            setLoading(false);
+        };
+        fetchConfig();
     }, []);
 
     const handleChange = (field, value) => {
@@ -28,10 +42,20 @@ export const ConfigurationSettings = () => {
         }));
     };
 
-    const handleSave = () => {
-        localStorage.setItem('appConfiguration', JSON.stringify(config));
-        alert('Configuration saved successfully!');
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await supabaseSettingsDB.setConfiguration(config);
+            alert('Configuration saved successfully!');
+        } catch (e) {
+            alert('Failed to save configuration.');
+        }
+        setSaving(false);
     };
+
+    if (loading) {
+        return <div className="text-center py-12 text-gray-500">Loading configuration...</div>;
+    }
 
     return (
         <div className="space-y-6">
@@ -173,9 +197,10 @@ export const ConfigurationSettings = () => {
                 <button
                     onClick={handleSave}
                     className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                    disabled={saving}
                 >
                     <Save size={20} />
-                    Save Configuration
+                    {saving ? 'Saving...' : 'Save Configuration'}
                 </button>
             </div>
         </div>

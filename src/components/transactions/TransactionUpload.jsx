@@ -8,10 +8,21 @@ export const TransactionUpload = ({ accounts, onUpload }) => {
 
     const handleFileChange = (e) => {
         const selectedFile = e.target.files[0];
-        if (selectedFile && selectedFile.type === 'text/csv') {
+        if (!selectedFile) return;
+        const validTypes = [
+            'text/csv',
+            'application/vnd.intu.qbo',
+            'application/x-qfx',
+            'application/xml',
+            'text/xml',
+        ];
+        const validExtensions = ['.csv', '.qbo', '.qfx'];
+        const fileName = selectedFile.name.toLowerCase();
+        const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+        if (validTypes.includes(selectedFile.type) || hasValidExtension) {
             setFile(selectedFile);
         } else {
-            alert('Please select a valid CSV file');
+            alert('Please select a valid CSV, QBO, or QFX file');
         }
     };
 
@@ -64,12 +75,12 @@ export const TransactionUpload = ({ accounts, onUpload }) => {
 
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Upload CSV File *
+                        Upload CSV or QuickBooks File *
                     </label>
                     <input
                         id="file-upload"
                         type="file"
-                        accept=".csv"
+                        accept=".csv,.qbo,.qfx"
                         onChange={handleFileChange}
                         className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
@@ -81,12 +92,10 @@ export const TransactionUpload = ({ accounts, onUpload }) => {
                 </div>
 
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                    <h4 className="font-medium text-blue-900 mb-2">CSV Format Requirements:</h4>
+                    <h4 className="font-medium text-blue-900 mb-2">Supported Formats:</h4>
                     <ul className="text-sm text-blue-800 space-y-1">
-                        <li>• Required columns: <code className="bg-blue-100 px-1 rounded">date</code>, <code className="bg-blue-100 px-1 rounded">description</code>, <code className="bg-blue-100 px-1 rounded">amount</code></li>
-                        <li>• Optional columns: <code className="bg-blue-100 px-1 rounded">category</code></li>
-                        <li>• Date format: YYYY-MM-DD or MM/DD/YYYY</li>
-                        <li>• Amount: positive for income, negative for expenses</li>
+                        <li>• <b>CSV</b>: Required columns: <code className="bg-blue-100 px-1 rounded">date</code>, <code className="bg-blue-100 px-1 rounded">description</code>, <code className="bg-blue-100 px-1 rounded">amount</code>. Optional: <code className="bg-blue-100 px-1 rounded">category</code>. Date: YYYY-MM-DD or MM/DD/YYYY. Amount: positive for income, negative for expenses.</li>
+                        <li>• <b>QuickBooks (QBO/QFX)</b>: Export from QuickBooks or your bank. Transactions will be auto-mapped.</li>
                     </ul>
                 </div>
 

@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, Save } from 'lucide-react';
+import { supabaseSettingsDB } from '../../services/supabaseDatabase';
 
 const DEFAULT_PAGES = [
     { id: 'accounts', name: 'Accounts', enabled: true, order: 1 },
@@ -12,14 +14,25 @@ const DEFAULT_PAGES = [
 
 export const PagesSettings = () => {
     const [pages, setPages] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        const saved = localStorage.getItem('pagesConfiguration');
-        if (saved) {
-            setPages(JSON.parse(saved));
-        } else {
-            setPages(DEFAULT_PAGES);
-        }
+        const fetchPages = async () => {
+            setLoading(true);
+            try {
+                const data = await supabaseSettingsDB.getPagesConfiguration();
+                if (data && Array.isArray(data) && data.length > 0) {
+                    setPages(data);
+                } else {
+                    setPages(DEFAULT_PAGES);
+                }
+            } catch (e) {
+                setPages(DEFAULT_PAGES);
+            }
+            setLoading(false);
+        };
+        fetchPages();
     }, []);
 
     const handleToggle = (id) => {
@@ -37,32 +50,37 @@ export const PagesSettings = () => {
         ) {
             return;
         }
-
         const newPages = [...pages];
         const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-
         [newPages[currentIndex], newPages[targetIndex]] =
             [newPages[targetIndex], newPages[currentIndex]];
-
         // Update order numbers
         newPages.forEach((page, index) => {
             page.order = index + 1;
         });
-
         setPages(newPages);
     };
 
-    const handleSave = () => {
-        localStorage.setItem('pagesConfiguration', JSON.stringify(pages));
-        alert('Pages configuration saved successfully!');
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await supabaseSettingsDB.setPagesConfiguration(pages);
+            alert('Pages configuration saved successfully!');
+        } catch (e) {
+            alert('Failed to save pages configuration.');
+        }
+        setSaving(false);
     };
 
     const handleReset = () => {
         if (window.confirm('Reset to default pages configuration?')) {
             setPages(DEFAULT_PAGES);
-            localStorage.setItem('pagesConfiguration', JSON.stringify(DEFAULT_PAGES));
         }
     };
+
+    if (loading) {
+        return <div className="text-center py-12 text-gray-500">Loading pages configuration...</div>;
+    }
 
     return (
         <div className="space-y-6">
@@ -85,9 +103,10 @@ export const PagesSettings = () => {
                     <button
                         onClick={handleSave}
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                        disabled={saving}
                     >
                         <Save size={20} />
-                        Save Changes
+                        {saving ? 'Saving...' : 'Save Changes'}
                     </button>
                 </div>
             </div>
@@ -98,8 +117,8 @@ export const PagesSettings = () => {
                     <div
                         key={page.id}
                         className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${page.enabled
-                                ? 'bg-white border-gray-200'
-                                : 'bg-gray-50 border-gray-300 opacity-60'
+                            ? 'bg-white border-gray-200'
+                            : 'bg-gray-50 border-gray-300 opacity-60'
                             }`}
                     >
                         <div className="flex items-center gap-4">
@@ -139,8 +158,8 @@ export const PagesSettings = () => {
                             <button
                                 onClick={() => handleToggle(page.id)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${page.enabled
-                                        ? 'bg-green-600 text-white hover:bg-green-700'
-                                        : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                                    ? 'bg-green-600 text-white hover:bg-green-700'
+                                    : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
                                     }`}
                             >
                                 {page.enabled ? (

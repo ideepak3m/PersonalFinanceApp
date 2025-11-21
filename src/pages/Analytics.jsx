@@ -1,16 +1,31 @@
-import React from 'react';
-import { useFinance } from '../context/FinanceContext';
+
+import React, { useEffect, useState } from 'react';
 import { PortfolioCard } from '../components/analytics/PortfolioCard';
 import { CategoryChart } from '../components/analytics/CategoryChart';
 import { DollarSign, TrendingUp, PiggyBank } from 'lucide-react';
 import { calculateTotalBalance } from '../utils/calculations';
+import { supabaseAccountsDB, supabaseTransactionsDB } from '../services/supabaseDatabase';
 
 export const Analytics = () => {
-    const { accounts, transactions, getTotalByCountry } = useFinance();
+    const [accounts, setAccounts] = useState([]);
+    const [transactions, setTransactions] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            setLoading(true);
+            const accs = await supabaseAccountsDB.getAll();
+            setAccounts(accs);
+            const txns = await supabaseTransactionsDB.getAll();
+            setTransactions(txns);
+            setLoading(false);
+        };
+        fetchData();
+    }, []);
 
     const totalBalance = calculateTotalBalance(accounts);
-    const canadaTotal = getTotalByCountry('canada');
-    const indiaTotal = getTotalByCountry('india');
+    const canadaTotal = accounts.filter(a => a.country === 'canada').reduce((sum, a) => sum + (a.balance || 0), 0);
+    const indiaTotal = accounts.filter(a => a.country === 'india').reduce((sum, a) => sum + (a.balance || 0), 0);
 
     const totalIncome = transactions
         .filter(txn => txn.amount > 0)
@@ -23,6 +38,10 @@ export const Analytics = () => {
     );
 
     const netSavings = totalIncome - totalExpenses;
+
+    if (loading) {
+        return <div className="text-center py-12 text-gray-500">Loading analytics...</div>;
+    }
 
     return (
         <div className="space-y-6">
@@ -111,7 +130,7 @@ export const Analytics = () => {
                                 <div className="flex justify-between items-center mb-1">
                                     <span className="text-gray-700 font-medium">{account.name}</span>
                                     <span className="text-gray-600">
-                                        ${account.balance.toFixed(2)} ({percentage.toFixed(1)}%)
+                                        ${account.balance?.toFixed(2) || '0.00'} ({percentage.toFixed(1)}%)
                                     </span>
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2">

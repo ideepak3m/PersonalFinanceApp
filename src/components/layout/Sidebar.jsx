@@ -8,11 +8,12 @@ const iconMap = {
 };
 
 export const Sidebar = () => {
-    const { user, signOut } = useAuth();
+    const { profile, signOut } = useAuth();
     const navigate = useNavigate();
-    
+
     const navItems = [
-        { path: '/', label: 'Accounts', icon: 'DollarSign' },
+        { path: '/', label: 'Dashboard', icon: 'TrendingUp' },
+        { path: '/accounts', label: 'Accounts', icon: 'DollarSign' },
         { path: '/transactions', label: 'Transactions', icon: 'Upload' },
         { path: '/analytics', label: 'Analytics', icon: 'TrendingUp' },
         { path: '/knowledge', label: 'Knowledge', icon: 'BookOpen' },
@@ -75,14 +76,17 @@ export const Sidebar = () => {
                 <div className="flex items-center justify-between px-2">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold">
-                            {user?.email?.[0]?.toUpperCase() || 'U'}
+                            {(() => {
+                                const name = profile?.full_name || '';
+                                if (!name) return 'U';
+                                const parts = name.trim().split(' ');
+                                if (parts.length === 1) return parts[0][0]?.toUpperCase();
+                                return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                            })()}
                         </div>
                         <div>
                             <p className="text-sm font-semibold text-white">
-                                {user?.user_metadata?.full_name || 'User'}
-                            </p>
-                            <p className="text-xs text-gray-400 truncate max-w-[120px]">
-                                {user?.email || 'user@email.com'}
+                                {profile?.full_name || 'User'}
                             </p>
                         </div>
                     </div>

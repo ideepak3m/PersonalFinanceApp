@@ -13,6 +13,7 @@ import { AIAdvisor } from './pages/AIAdvisor';
 import { Settings } from './pages/Settings';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import Dashboard from './pages/Dashboard';
 
 function App() {
   return (
@@ -37,13 +38,15 @@ function App() {
                         subtitle="Manage your finances across Canada and India"
                       />
                       <main className="flex-1 overflow-auto p-6">
+                        {/* Use a single-level Routes for main content */}
                         <Routes>
-                          <Route path="/" element={<Accounts />} />
-                          <Route path="/transactions" element={<Transactions />} />
-                          <Route path="/analytics" element={<Analytics />} />
-                          <Route path="/knowledge" element={<Knowledge />} />
-                          <Route path="/ai-advisor" element={<AIAdvisor />} />
-                          <Route path="/settings" element={<Settings />} />
+                          <Route path="/" element={<Dashboard />} />
+                          <Route path="accounts" element={<Accounts />} />
+                          <Route path="transactions" element={<Transactions />} />
+                          <Route path="analytics" element={<Analytics />} />
+                          <Route path="knowledge" element={<Knowledge />} />
+                          <Route path="ai-advisor" element={<AIAdvisor />} />
+                          <Route path="settings" element={<Settings />} />
                         </Routes>
                       </main>
                     </div>

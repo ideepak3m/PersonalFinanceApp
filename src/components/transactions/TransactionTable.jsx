@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import { Trash2, Edit } from 'lucide-react';
-import { formatCurrency, formatDate } from '../../utils/formatters';
-
-export const TransactionTable = ({ transactions, accounts, onDelete, onEdit }) => {
+// Add onSplit and splitEnabledChecker props
+export const TransactionTable = ({ transactions, accounts, onDelete, onEdit, onSplit, splitEnabledChecker }) => {
     const [filter, setFilter] = useState('all');
     const [sortBy, setSortBy] = useState('date');
 
@@ -43,8 +41,8 @@ export const TransactionTable = ({ transactions, accounts, onDelete, onEdit }) =
                     <button
                         onClick={() => setFilter('all')}
                         className={`px-4 py-2 rounded-md transition-colors ${filter === 'all'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                     >
                         All
@@ -52,8 +50,8 @@ export const TransactionTable = ({ transactions, accounts, onDelete, onEdit }) =
                     <button
                         onClick={() => setFilter('income')}
                         className={`px-4 py-2 rounded-md transition-colors ${filter === 'income'
-                                ? 'bg-green-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                     >
                         Income
@@ -61,8 +59,8 @@ export const TransactionTable = ({ transactions, accounts, onDelete, onEdit }) =
                     <button
                         onClick={() => setFilter('expense')}
                         className={`px-4 py-2 rounded-md transition-colors ${filter === 'expense'
-                                ? 'bg-red-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-red-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                     >
                         Expenses
@@ -101,47 +99,72 @@ export const TransactionTable = ({ transactions, accounts, onDelete, onEdit }) =
                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Actions
                             </th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-yellow-100">
+                                Debug: CatID/Split
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {sortedTransactions.map((txn) => (
-                            <tr key={txn.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {formatDate(txn.date)}
-                                </td>
-                                <td className="px-6 py-4 text-sm text-gray-900">
-                                    {txn.description}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                    {getAccountName(txn.accountId)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">
-                                        {txn.category}
-                                    </span>
-                                </td>
-                                <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${txn.amount >= 0 ? 'text-green-600' : 'text-red-600'
-                                    }`}>
-                                    {formatCurrency(txn.amount)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                    <div className="flex justify-end gap-2">
-                                        <button
-                                            onClick={() => onEdit(txn)}
-                                            className="text-blue-600 hover:text-blue-800"
-                                        >
-                                            <Edit size={16} />
-                                        </button>
-                                        <button
-                                            onClick={() => onDelete(txn.id)}
-                                            className="text-red-600 hover:text-red-800"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                        {sortedTransactions.map((txn) => {
+                            const canSplit = splitEnabledChecker ? splitEnabledChecker(txn) : false;
+                            // Debug: get category_id and is_split_enabled
+                            let debugCatId = txn.category_id || txn.categoryId || '';
+                            let debugIsSplit = '';
+                            if (typeof window !== 'undefined' && window.__categories) {
+                                const cat = window.__categories.find(c => c.id === debugCatId);
+                                debugIsSplit = cat ? String(cat.is_split_enabled) : '';
+                            }
+                            return (
+                                <tr key={txn.id} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {formatDate(txn.date)}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-xs bg-yellow-50">
+                                        {debugCatId} / {debugIsSplit}
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-900">
+                                        {txn.description}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                        {getAccountName(txn.accountId)}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">
+                                            {txn.category}
+                                        </span>
+                                    </td>
+                                    <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${txn.amount >= 0 ? 'text-green-600' : 'text-red-600'
+                                        }`}>
+                                        {formatCurrency(txn.amount)}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                        <div className="flex justify-end gap-2">
+                                            <button
+                                                onClick={() => onEdit(txn)}
+                                                className="text-blue-600 hover:text-blue-800"
+                                            >
+                                                <Edit size={16} />
+                                            </button>
+                                            <button
+                                                onClick={() => onDelete(txn.id)}
+                                                className="text-red-600 hover:text-red-800"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                            {canSplit && (
+                                                <button
+                                                    onClick={() => onSplit(txn)}
+                                                    className="text-purple-600 hover:text-purple-800"
+                                                    title="Split Transaction"
+                                                >
+                                                    Split
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Save } from 'lucide-react';
+import { supabaseSettingsDB } from '../../services/supabaseDatabase';
 
 const DEFAULT_CHART_OF_ACCOUNTS = [
     { id: 1, code: '1000', name: 'Cash', type: 'Asset', description: 'Cash in hand and bank' },
@@ -7,7 +9,7 @@ const DEFAULT_CHART_OF_ACCOUNTS = [
     { id: 3, code: '1200', name: 'Investments', type: 'Asset', description: 'Stocks, bonds, mutual funds' },
     { id: 4, code: '2000', name: 'Accounts Payable', type: 'Liability', description: 'Money you owe' },
     { id: 5, code: '2100', name: 'Credit Cards', type: 'Liability', description: 'Credit card balances' },
-    { id: 6, code: '3000', name: 'Equity', type: 'Equity', description: 'Owner\'s equity' },
+    { id: 6, code: '3000', name: 'Equity', type: 'Equity', description: "Owner's equity" },
     { id: 7, code: '4000', name: 'Salary Income', type: 'Income', description: 'Employment income' },
     { id: 8, code: '4100', name: 'Investment Income', type: 'Income', description: 'Dividends, interest, capital gains' },
     { id: 9, code: '5000', name: 'Housing', type: 'Expense', description: 'Rent, mortgage, utilities' },
@@ -26,20 +28,36 @@ export const ChartOfAccounts = () => {
         type: 'Asset',
         description: ''
     });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        const saved = localStorage.getItem('chartOfAccounts');
-        if (saved) {
-            setAccounts(JSON.parse(saved));
-        } else {
-            setAccounts(DEFAULT_CHART_OF_ACCOUNTS);
-            localStorage.setItem('chartOfAccounts', JSON.stringify(DEFAULT_CHART_OF_ACCOUNTS));
-        }
+        const fetchAccounts = async () => {
+            setLoading(true);
+            try {
+                const data = await supabaseSettingsDB.getChartOfAccounts();
+                if (data && Array.isArray(data) && data.length > 0) {
+                    setAccounts(data);
+                } else {
+                    setAccounts(DEFAULT_CHART_OF_ACCOUNTS);
+                }
+            } catch (e) {
+                setAccounts(DEFAULT_CHART_OF_ACCOUNTS);
+            }
+            setLoading(false);
+        };
+        fetchAccounts();
     }, []);
 
-    const handleSave = () => {
-        localStorage.setItem('chartOfAccounts', JSON.stringify(accounts));
-        alert('Chart of Accounts saved successfully!');
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await supabaseSettingsDB.setChartOfAccounts(accounts);
+            alert('Chart of Accounts saved successfully!');
+        } catch (e) {
+            alert('Failed to save Chart of Accounts.');
+        }
+        setSaving(false);
     };
 
     const handleAdd = () => {
@@ -47,12 +65,10 @@ export const ChartOfAccounts = () => {
             alert('Code and Name are required');
             return;
         }
-
         const newAccount = {
             id: Date.now(),
             ...formData
         };
-
         const updated = [...accounts, newAccount];
         setAccounts(updated);
         setFormData({ code: '', name: '', type: 'Asset', description: '' });
@@ -82,6 +98,10 @@ export const ChartOfAccounts = () => {
 
     const accountTypes = ['Asset', 'Liability', 'Equity', 'Income', 'Expense'];
 
+    if (loading) {
+        return <div className="text-center py-12 text-gray-500">Loading chart of accounts...</div>;
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-start">
@@ -104,9 +124,10 @@ export const ChartOfAccounts = () => {
                     <button
                         onClick={handleSave}
                         className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                        disabled={saving}
                     >
                         <Save size={20} />
-                        Save
+                        {saving ? 'Saving...' : 'Save'}
                     </button>
                 </div>
             </div>
@@ -223,10 +244,10 @@ export const ChartOfAccounts = () => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <span className={`px-2 py-1 text-xs font-medium rounded ${account.type === 'Asset' ? 'bg-green-100 text-green-800' :
-                                            account.type === 'Liability' ? 'bg-red-100 text-red-800' :
-                                                account.type === 'Equity' ? 'bg-blue-100 text-blue-800' :
-                                                    account.type === 'Income' ? 'bg-purple-100 text-purple-800' :
-                                                        'bg-orange-100 text-orange-800'
+                                        account.type === 'Liability' ? 'bg-red-100 text-red-800' :
+                                            account.type === 'Equity' ? 'bg-blue-100 text-blue-800' :
+                                                account.type === 'Income' ? 'bg-purple-100 text-purple-800' :
+                                                    'bg-orange-100 text-orange-800'
                                         }`}>
                                         {account.type}
                                     </span>

@@ -47,7 +47,7 @@ In your project root, create `.env.local` and add:
 
 ```env
 VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_SUPABASE_PK_KEY=your_supabase_anon_key
 ```
 
 Get these from your Supabase dashboard (Project Settings → API).

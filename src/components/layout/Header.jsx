@@ -8,17 +8,20 @@ export const Header = ({ title, subtitle }) => {
 
     return (
         <header className="bg-gray-800 border-b border-gray-700 px-6 py-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4 mb-8">
+                <div className="bg-gradient-to-tr from-purple-500 to-blue-500 rounded-xl p-3">
+                    <img src="/PersonalFinance.png" alt="Finance Logo" className="w-12 h-12" />
+                </div>
                 <div>
-                    <h1 className="text-2xl font-bold text-white">{title}</h1>
-                    <p className="text-sm text-gray-400 mt-1">{subtitle}</p>
+                    <h1 className="text-3xl font-bold text-white leading-tight">{title}</h1>
+                    <p className="text-gray-300 text-lg">{subtitle}</p>
                 </div>
-                <div className="text-right">
-                    <p className="text-sm text-gray-400">Total Portfolio</p>
-                    <p className="text-xl font-bold text-white">
-                        ${totalPortfolio.toFixed(2)}
-                    </p>
-                </div>
+            </div>
+            <div className="text-right">
+                <p className="text-sm text-gray-400">Total Portfolio</p>
+                <p className="text-xl font-bold text-white">
+                    ${totalPortfolio.toFixed(2)}
+                </p>
             </div>
         </header>
     );

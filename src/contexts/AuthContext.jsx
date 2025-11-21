@@ -13,6 +13,7 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
+    const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -31,6 +32,23 @@ export const AuthProvider = ({ children }) => {
 
         return () => subscription.unsubscribe();
     }, []);
+
+    // Fetch user profile from profiles table
+    useEffect(() => {
+        const fetchProfile = async () => {
+            if (user?.id) {
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single();
+                setProfile(data || null);
+            } else {
+                setProfile(null);
+            }
+        };
+        fetchProfile();
+    }, [user]);
 
     const signUp = async (email, password, metadata = {}) => {
         try {
@@ -107,6 +125,7 @@ export const AuthProvider = ({ children }) => {
 
     const value = {
         user,
+        profile,
         loading,
         error,
         signUp,

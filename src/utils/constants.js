@@ -36,7 +36,10 @@ export const ACCOUNT_CATEGORIES = {
     EDUCATION: 'education',          // Education savings
     HEALTH_SAVINGS: 'health_savings', // Health Savings Account
     TRUST: 'trust',                  // Trust account
-    GENERAL: 'general'               // General purpose account
+    GENERAL: 'general',               // General purpose account
+
+    //Credit cards
+    CREDIT_CARD: 'credit_card'
 };
 
 export const PRODUCT_TYPES = {
@@ -135,6 +138,9 @@ export const ACCOUNT_CATEGORY_GROUPS = {
         { value: 'health_savings', label: 'Health Savings Account', country: 'all' },
         { value: 'trust', label: 'Trust Account', country: 'all' },
         { value: 'general', label: 'General Account', country: 'all' }
+    ],
+    'Credit Cards': [
+        { value: 'credit_card', label: 'Credit Card', country: 'all' }
     ]
 };
 
@@ -202,7 +208,8 @@ export const ACCOUNT_TYPES = {
             { value: 'fhsa', label: 'FHSA' },
             { value: 'resp', label: 'RESP' },
             { value: 'brokerage', label: 'Brokerage Account' },
-            { value: 'insurance', label: 'Insurance' }
+            { value: 'insurance', label: 'Insurance' },
+            { value: "credit_card", label: "Credit Card" }
         ]
     },
     india: {
@@ -221,7 +228,7 @@ export const ACCOUNT_TYPES = {
 export const CATEGORIES = [
     'Income', 'Housing', 'Transportation', 'Food',
     'Utilities', 'Healthcare', 'Entertainment',
-    'Investment', 'Insurance', 'Other'
+    'Investment', 'Insurance', 'Other', 'Credit Card'
 ];
 
 export const NAV_ITEMS = [

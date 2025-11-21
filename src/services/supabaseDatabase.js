@@ -1,445 +1,641 @@
-// src/services/supabaseDatabase.js
+// SupabaseDatabase.js - Updated for personal_finance schema
 import { supabase } from './supabaseClient';
 
-// Helper to get current user ID
-const getUserId = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id;
-};
-
-// Providers
-export const supabaseProvidersDB = {
-  getAll: async () => {
-    const { data, error } = await supabase
-      .from('providers')
-      .select('*')
-      .order('name');
-    if (error) throw error;
-    return data;
-  },
-
-  getByCountry: async (country) => {
-    const { data, error } = await supabase
-      .from('providers')
-      .select('*')
-      .eq('country', country);
-    if (error) throw error;
-    return data;
-  },
-
-  getByType: async (type) => {
-    const { data, error } = await supabase
-      .from('providers')
-      .select('*')
-      .eq('type', type);
-    if (error) throw error;
-    return data;
-  },
-
-  add: async (provider) => {
-    const userId = await getUserId();
-    const { data, error } = await supabase
-      .from('providers')
-      .insert([{ ...provider, user_id: userId }])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
-
-  update: async (id, updates) => {
-    const { data, error } = await supabase
-      .from('providers')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
-
-  delete: async (id) => {
-    const { error } = await supabase
-      .from('providers')
-      .delete()
-      .eq('id', id);
-    if (error) throw error;
-  }
-};
-
-// Accounts
-export const supabaseAccountsDB = {
-  getAll: async () => {
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('*, providers(*)')
-      .order('name');
-    if (error) throw error;
-    return data;
-  },
-
-  getAllWithProviders: async () => {
-    return await supabaseAccountsDB.getAll();
-  },
-
-  getByCategory: async (category) => {
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('*')
-      .eq('account_category', category);
-    if (error) throw error;
-    return data;
-  },
-
-  getByProvider: async (providerId) => {
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('*')
-      .eq('provider_id', providerId);
-    if (error) throw error;
-    return data;
-  },
-
-  getByCountry: async (country) => {
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('*')
-      .eq('country', country);
-    if (error) throw error;
-    return data;
-  },
-
-  add: async (account) => {
-    const userId = await getUserId();
-    const { data, error } = await supabase
-      .from('accounts')
-      .insert([{
-        ...account,
-        user_id: userId,
-        provider_id: account.providerId
-      }])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
-
-  update: async (id, updates) => {
-    const { data, error } = await supabase
-      .from('accounts')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
-
-  delete: async (id) => {
-    const { error } = await supabase
-      .from('accounts')
-      .delete()
-      .eq('id', id);
-    if (error) throw error;
-  },
-
-  getValue: async (accountId) => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('quantity, current_price')
-      .eq('account_id', accountId);
-    if (error) throw error;
-    return data.reduce((sum, p) => sum + (p.quantity * p.current_price), 0);
-  }
-};
-
-// Products
-export const supabaseProductsDB = {
-  getAll: async () => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('product_name');
-    if (error) throw error;
-    return data;
-  },
-
-  getByAccount: async (accountId) => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('account_id', accountId);
-    if (error) throw error;
-    return data;
-  },
-
-  getByType: async (productType) => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('product_type', productType);
-    if (error) throw error;
-    return data;
-  },
-
-  getByAccountAndType: async (accountId, productType) => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('account_id', accountId)
-      .eq('product_type', productType);
-    if (error) throw error;
-    return data;
-  },
-
-  add: async (product) => {
-    const userId = await getUserId();
-    const { data, error } = await supabase
-      .from('products')
-      .insert([{
-        ...product,
-        user_id: userId,
-        account_id: product.accountId,
-        product_type: product.productType,
-        product_name: product.productName,
-        product_code: product.productCode,
-        purchase_price: product.purchasePrice,
-        current_price: product.currentPrice,
-        purchase_date: product.purchaseDate,
-        maturity_date: product.maturityDate
-      }])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
-
-  update: async (id, updates) => {
-    const { data, error } = await supabase
-      .from('products')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
-
-  delete: async (id) => {
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', id);
-    if (error) throw error;
-  },
-
-  getWithMetadata: async (id) => {
-    const { data: product, error: productError } = await supabase
-      .from('products')
-      .select('*')
-      .eq('id', id)
-      .single();
-    if (productError) throw productError;
-
-    const { data: metadata, error: metaError } = await supabase
-      .from('product_metadata')
-      .select('*')
-      .eq('product_id', id);
-    if (metaError) throw metaError;
-
-    product.metadata = {};
-    metadata.forEach(m => {
-      product.metadata[m.key] = m.value;
-    });
-    return product;
-  },
-
-  getValue: async (id) => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('quantity, current_price')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data.quantity * data.current_price;
-  },
-
-  getGainLoss: async (id) => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('quantity, current_price, purchase_price')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    const currentValue = data.quantity * data.current_price;
-    const purchaseValue = data.quantity * data.purchase_price;
-    return currentValue - purchaseValue;
-  }
-};
-
-// Product Metadata
-export const supabaseProductMetadataDB = {
-  getByProduct: async (productId) => {
-    const { data, error } = await supabase
-      .from('product_metadata')
-      .select('*')
-      .eq('product_id', productId);
-    if (error) throw error;
-    return data;
-  },
-
-  get: async (productId, key) => {
-    const { data, error } = await supabase
-      .from('product_metadata')
-      .select('*')
-      .eq('product_id', productId)
-      .eq('key', key)
-      .single();
-    if (error && error.code !== 'PGRST116') throw error;
-    return data;
-  },
-
-  set: async (productId, key, value) => {
-    const userId = await getUserId();
-    const existing = await supabaseProductMetadataDB.get(productId, key);
-    
-    if (existing) {
-      const { error } = await supabase
-        .from('product_metadata')
-        .update({ value })
-        .eq('id', existing.id);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase
-        .from('product_metadata')
-        .insert([{
-          product_id: productId,
-          user_id: userId,
-          key,
-          value
-        }]);
-      if (error) throw error;
+/**
+ * Generic database service factory for personal_finance schema
+ * Handles automatic snake_case <-> camelCase conversion
+ */
+class SupabaseService {
+    constructor(tableName, schema = 'personal_finance') {
+        this.tableName = tableName;
+        this.schema = schema;
     }
-  },
 
-  delete: async (productId, key) => {
-    const { error } = await supabase
-      .from('product_metadata')
-      .delete()
-      .eq('product_id', productId)
-      .eq('key', key);
-    if (error) throw error;
-  }
-};
+    /**
+     * Convert camelCase to snake_case
+     */
+    toSnakeCase(obj) {
+        if (!obj || typeof obj !== 'object') return obj;
+        if (Array.isArray(obj)) return obj.map(item => this.toSnakeCase(item));
 
-// Transactions
-export const supabaseTransactionsDB = {
-  getAll: async () => {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .order('date', { ascending: false });
-    if (error) throw error;
-    return data;
-  },
+        const converted = {};
+        for (const [key, value] of Object.entries(obj)) {
+            const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+            converted[snakeKey] = value;
+        }
+        return converted;
+    }
 
-  getByAccount: async (accountId) => {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('account_id', accountId)
-      .order('date', { ascending: false });
-    if (error) throw error;
-    return data;
-  },
+    /**
+     * Convert snake_case to camelCase
+     */
+    toCamelCase(obj) {
+        if (!obj || typeof obj !== 'object') return obj;
+        if (Array.isArray(obj)) return obj.map(item => this.toCamelCase(item));
 
-  getByProduct: async (productId) => {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('product_id', productId)
-      .order('date', { ascending: false });
-    if (error) throw error;
-    return data;
-  },
+        const converted = {};
+        for (const [key, value] of Object.entries(obj)) {
+            const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+            converted[camelKey] = value;
+        }
+        return converted;
+    }
 
-  getByDateRange: async (startDate, endDate) => {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date');
-    if (error) throw error;
-    return data;
-  },
+    /**
+     * Get table reference with schema
+     */
+    table() {
+        return supabase.from(this.tableName);
+    }
 
-  getByType: async (type) => {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('type', type);
-    if (error) throw error;
-    return data;
-  },
+    /**
+     * Get all records for current user
+     */
+    async getAll() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
 
-  add: async (transaction) => {
-    const userId = await getUserId();
-    const { data, error } = await supabase
-      .from('transactions')
-      .insert([{
-        ...transaction,
-        user_id: userId,
-        account_id: transaction.accountId,
-        product_id: transaction.productId
-      }])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
+            const { data, error } = await this.table()
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
 
-  bulkAdd: async (transactions) => {
-    const userId = await getUserId();
-    const records = transactions.map(t => ({
-      ...t,
-      user_id: userId,
-      account_id: t.accountId,
-      product_id: t.productId
-    }));
-    const { error } = await supabase
-      .from('transactions')
-      .insert(records);
-    if (error) throw error;
-  },
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error(`Error fetching from ${this.tableName}:`, error);
+            throw error;
+        }
+    }
 
-  update: async (id, updates) => {
-    const { data, error } = await supabase
-      .from('transactions')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
+    /**
+     * Get single record by ID
+     */
+    async getById(id) {
+        try {
+            const { data, error } = await this.table()
+                .select('*')
+                .eq('id', id)
+                .single();
 
-  delete: async (id) => {
-    const { error } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('id', id);
-    if (error) throw error;
-  }
-};
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error(`Error fetching ${this.tableName} by ID:`, error);
+            throw error;
+        }
+    }
 
-// Export combined API
-export const supabaseDB = {
-  providers: supabaseProvidersDB,
-  accounts: supabaseAccountsDB,
-  products: supabaseProductsDB,
-  productMetadata: supabaseProductMetadataDB,
-  transactions: supabaseTransactionsDB
-};
+    /**
+     * Add single record (converts camelCase to snake_case)
+     */
+    async add(record) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
 
-export default supabaseDB;
+            // Convert camelCase to snake_case for database
+            const snakeCaseRecord = this.toSnakeCase(record);
+
+            // Ensure user_id is set
+            if (!snakeCaseRecord.user_id) {
+                snakeCaseRecord.user_id = user.id;
+            }
+
+            // Log what is being sent to the transaction table
+            console.log('[TransactionService.add] Sending to transaction table:', snakeCaseRecord);
+
+            const { data, error } = await this.table()
+                .insert([snakeCaseRecord])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error(`Error adding to ${this.tableName}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Bulk add records
+     */
+    async bulkAdd(records) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            // Convert all records to snake_case
+            const snakeCaseRecords = records.map(record => {
+                const converted = this.toSnakeCase(record);
+                if (!converted.user_id) {
+                    converted.user_id = user.id;
+                }
+                return converted;
+            });
+
+            const { data, error } = await this.table()
+                .insert(snakeCaseRecords)
+                .select();
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error(`Error bulk adding to ${this.tableName}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update record by ID
+     */
+    async update(id, updates) {
+        try {
+            // Convert camelCase to snake_case
+            const snakeCaseUpdates = this.toSnakeCase(updates);
+
+            const { data, error } = await this.table()
+                .update(snakeCaseUpdates)
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error(`Error updating ${this.tableName}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete record by ID
+     */
+    async delete(id) {
+        try {
+            const { error } = await this.table()
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error(`Error deleting from ${this.tableName}:`, error);
+            throw error;
+        }
+    }
+}
+
+/**
+ * Transaction-specific service with additional methods
+ */
+class TransactionService extends SupabaseService {
+    constructor() {
+        super('transactions', 'personal_finance');
+    }
+
+    /**
+     * Get all transactions with related data
+     */
+    async getAllWithRelations() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const { data, error } = await this.table()
+                .select(`
+                    *,
+                    merchant:normalized_merchant_id (
+                        id,
+                        normalized_name,
+                        category:category_id (
+                            id,
+                            name,
+                            is_split_enabled
+                        )
+                    ),
+                    account:account_id (
+                        id,
+                        name,
+                        account_number
+                    ),
+                    chart_of_account:chart_of_account_id (
+                        id,
+                        code,
+                        name
+                    ),
+                    splits:transaction_split (
+                        id,
+                        amount,
+                        percentage,
+                        chart_of_account:chart_of_account_id (
+                            id,
+                            code,
+                            name
+                        )
+                    )
+                `)
+                .eq('user_id', user.id)
+                .order('date', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching transactions with relations:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get transactions by date range
+     */
+    async getByDateRange(startDate, endDate) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const { data, error } = await this.table()
+                .select('*')
+                .eq('user_id', user.id)
+                .gte('date', startDate)
+                .lte('date', endDate)
+                .order('date', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching transactions by date range:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get transactions by account
+     */
+    async getByAccount(accountId) {
+        try {
+            const { data, error } = await this.table()
+                .select('*')
+                .eq('account_id', accountId)
+                .order('date', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching transactions by account:', error);
+            throw error;
+        }
+    }
+}
+
+/**
+ * Transaction Split specific service
+ */
+class TransactionSplitService extends SupabaseService {
+    constructor() {
+        super('transaction_split', 'personal_finance');
+    }
+
+    /**
+     * Get splits for a transaction
+     */
+    async getByTransactionId(transactionId) {
+        try {
+            const { data, error } = await this.table()
+                .select(`
+                    *,
+                    chart_of_account:chart_of_account_id (
+                        id,
+                        code,
+                        name
+                    )
+                `)
+                .eq('transaction_id', transactionId);
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching transaction splits:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete all splits for a transaction
+     */
+    async deleteByTransactionId(transactionId) {
+        try {
+            const { error } = await this.table()
+                .delete()
+                .eq('transaction_id', transactionId);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error deleting transaction splits:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Override getAll to fetch all splits (no user_id filter)
+     */
+    async getAll() {
+        try {
+            const { data, error } = await this.table()
+                .select('*')
+                .order('inserted_at', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching all splits:', error);
+            throw error;
+        }
+    }
+}
+
+/**
+ * Merchant service without user_id requirement
+ */
+class MerchantService extends SupabaseService {
+    constructor() {
+        super('merchant', 'personal_finance');
+    }
+
+    /**
+     * Get all merchants (no user filter)
+     */
+    async getAll() {
+        try {
+            const { data, error } = await this.table()
+                .select(`
+                    *,
+                    category:category_id (
+                        id,
+                        name,
+                        is_split_enabled
+                    )
+                `)
+                .order('normalized_name');
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching merchants:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Find merchant by raw name or alias
+     */
+    async getByRawNameOrAlias(rawName) {
+        try {
+            if (!rawName) return null;
+
+            const lowerName = rawName.toLowerCase();
+
+            const { data, error } = await this.table()
+                .select('*')
+                .or(`normalized_name.ilike.${lowerName},aliases.cs.{${rawName}}`)
+                .limit(1)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+            return data || null;
+        } catch (error) {
+            console.error('Error finding merchant:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Add merchant (no user_id)
+     */
+    async add(record) {
+        try {
+            const snakeCaseRecord = this.toSnakeCase(record);
+
+            const { data, error } = await this.table()
+                .insert([snakeCaseRecord])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error adding merchant:', error);
+            throw error;
+        }
+    }
+}
+
+/**
+ * Category service without user_id requirement
+ */
+class CategoryService extends SupabaseService {
+    constructor() {
+        super('category', 'personal_finance');
+    }
+
+    /**
+     * Get all categories (no user filter)
+     */
+    async getAll() {
+        try {
+            const { data, error } = await this.table()
+                .select('*')
+                .order('name');
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching categories:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Add category (no user_id)
+     */
+    async add(record) {
+        try {
+            const snakeCaseRecord = this.toSnakeCase(record);
+
+            const { data, error } = await this.table()
+                .insert([snakeCaseRecord])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error adding category:', error);
+            throw error;
+        }
+    }
+}
+
+/**
+ * Belief Tags service without user_id requirement
+ */
+class BeliefTagsService extends SupabaseService {
+    constructor() {
+        super('belief_tags', 'personal_finance');
+    }
+
+    /**
+     * Get all belief tags (no user filter)
+     */
+    async getAll() {
+        try {
+            const { data, error } = await this.table()
+                .select(`
+                    *,
+                    category:category_id (
+                        id,
+                        name
+                    )
+                `)
+                .order('name');
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching belief tags:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Add belief tag (no user_id)
+     */
+    async add(record) {
+        try {
+            const snakeCaseRecord = this.toSnakeCase(record);
+
+            const { data, error } = await this.table()
+                .insert([snakeCaseRecord])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error adding belief tag:', error);
+            throw error;
+        }
+    }
+}
+
+/**
+ * User Preferences service
+ */
+class UserPreferencesService extends SupabaseService {
+    constructor() {
+        super('user_preferences', 'personal_finance');
+    }
+
+    /**
+     * Get user preferences for a merchant
+     */
+    async getByMerchant(merchantId) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const { data, error } = await this.table()
+                .select('*')
+                .eq('user_id', user.id)
+                .eq('merchant_id', merchantId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error;
+            return data || null;
+        } catch (error) {
+            console.error('Error fetching user preferences:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Upsert user preference
+     */
+    async upsert(merchantId, preferences) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const record = {
+                user_id: user.id,
+                merchant_id: merchantId,
+                preferred_split_json: preferences.preferred_split_json,
+                auto_tag_enabled: preferences.auto_tag_enabled ?? true
+            };
+
+            const { data, error } = await this.table()
+                .upsert(record, { onConflict: 'user_id,merchant_id' })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error upserting user preferences:', error);
+            throw error;
+        }
+    }
+}
+
+/**
+ * Product Metadata service
+ */
+class ProductMetadataService extends SupabaseService {
+    constructor() {
+        super('product_metadata', 'personal_finance');
+    }
+
+    /**
+     * Get metadata for a product
+     */
+    async getByProduct(productId) {
+        try {
+            const { data, error } = await this.table()
+                .select('*')
+                .eq('product_id', productId);
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching product metadata:', error);
+            throw error;
+        }
+    }
+}
+
+// Export service instances
+export const supabaseAccountsDB = new SupabaseService('accounts');
+export const supabaseTransactionsDB = new TransactionService();
+export const supabaseChartOfAccountsDB = new SupabaseService('chart_of_accounts');
+export const supabaseTransactionSplitDB = new TransactionSplitService();
+export const supabaseMerchantDB = new MerchantService();
+export const supabaseCategoryDB = new CategoryService();
+export const supabaseProvidersDB = new SupabaseService('providers');
+export const supabaseBudgetsDB = new SupabaseService('budgets');
+export const supabaseGoalsDB = new SupabaseService('goals');
+export const supabaseProductsDB = new SupabaseService('products');
+export const supabaseDescriptionRulesDB = new SupabaseService('description_rules');
+export const supabaseBeliefTagsDB = new BeliefTagsService();
+export const supabaseUserPreferencesDB = new UserPreferencesService();
+export const supabaseProductMetadataDB = new ProductMetadataService();
+export const supabaseProfilesDB = new SupabaseService('profiles');
+
+// Legacy/alias exports for backwards compatibility
+export const supabaseKnowledgeDB = supabaseBeliefTagsDB;
+export const supabaseSettingsDB = supabaseUserPreferencesDB; // If settings maps to user_preferences
+
+// If you have a separate settings table, uncomment this:
+// export const supabaseSettingsDB = new SupabaseService('settings');

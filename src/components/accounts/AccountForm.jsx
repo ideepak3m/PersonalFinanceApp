@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ACCOUNT_TYPES } from '../../utils/constants';
+import { ACCOUNT_TYPES, ACCOUNT_CATEGORIES } from '../../utils/constants';
 
 export const AccountForm = ({ onSubmit, initialData, onCancel }) => {
     const [formData, setFormData] = useState({
         name: '',
         country: 'canada',
         type: 'savings',
+        account_category: 'general',
         balance: '',
         institution: '',
         ...initialData
@@ -13,7 +14,7 @@ export const AccountForm = ({ onSubmit, initialData, onCancel }) => {
 
     useEffect(() => {
         if (initialData) {
-            setFormData({ ...formData, ...initialData });
+            setFormData(prev => ({ ...prev, ...initialData }));
         }
     }, [initialData]);
 
@@ -28,6 +29,7 @@ export const AccountForm = ({ onSubmit, initialData, onCancel }) => {
                 name: '',
                 country: 'canada',
                 type: 'savings',
+                account_category: 'general',
                 balance: '',
                 institution: ''
             });
@@ -98,6 +100,23 @@ export const AccountForm = ({ onSubmit, initialData, onCancel }) => {
                             <option key={type.value} value={type.value}>
                                 {type.label}
                             </option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Account Category *
+                    </label>
+                    <select
+                        name="account_category"
+                        value={formData.account_category}
+                        onChange={handleChange}
+                        required
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                        {Object.entries(ACCOUNT_CATEGORIES).map(([key, value]) => (
+                            <option key={key} value={value}>{key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
                         ))}
                     </select>
                 </div>

@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { useFinance } from '../context/FinanceContext';
+import React, { useState, useEffect } from 'react';
 import { ChatMessage } from '../components/ai/ChatMessage';
 import { ChatInput } from '../components/ai/ChatInput';
 import { getAIResponse } from '../services/aiService';
 import { Sparkles } from 'lucide-react';
+import { supabaseAccountsDB, supabaseTransactionsDB } from '../services/supabaseDatabase';
 
 export const AIAdvisor = () => {
-    const { accounts, transactions } = useFinance();
+    const [accounts, setAccounts] = useState([]);
+    const [transactions, setTransactions] = useState([]);
     const [messages, setMessages] = useState([
         {
             id: 1,
@@ -15,9 +16,21 @@ export const AIAdvisor = () => {
         }
     ]);
     const [loading, setLoading] = useState(false);
+    const [dataLoading, setDataLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            setDataLoading(true);
+            const accs = await supabaseAccountsDB.getAll();
+            setAccounts(accs);
+            const txns = await supabaseTransactionsDB.getAll();
+            setTransactions(txns);
+            setDataLoading(false);
+        };
+        fetchData();
+    }, []);
 
     const handleSend = async (message) => {
-        // Add user message
         const userMessage = {
             id: Date.now(),
             text: message,
@@ -27,16 +40,12 @@ export const AIAdvisor = () => {
         setLoading(true);
 
         try {
-            // Get AI response
             const context = {
                 accounts,
                 transactions,
                 countries: ['canada', 'india']
             };
-
             const response = await getAIResponse(message, context);
-
-            // Add AI response
             const aiMessage = {
                 id: Date.now() + 1,
                 text: response.message,
@@ -62,6 +71,10 @@ export const AIAdvisor = () => {
         "How do I create a budget?",
         "Should I pay off debt or invest?"
     ];
+
+    if (dataLoading) {
+        return <div className="text-center py-12 text-gray-500">Loading your financial data...</div>;
+    }
 
     return (
         <div className="space-y-6">
