@@ -2,6 +2,52 @@
 import { supabase } from './supabaseClient';
 
 /**
+ * Browser cache for frequently used tables
+ * Cache expires after 5 minutes
+ */
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+const cache = {
+    chartOfAccounts: { data: null, timestamp: 0 },
+    merchants: { data: null, timestamp: 0 },
+    categories: { data: null, timestamp: 0 }
+};
+
+const isCacheValid = (cacheKey) => {
+    const cached = cache[cacheKey];
+    if (!cached.data) return false;
+    return (Date.now() - cached.timestamp) < CACHE_TTL;
+};
+
+const getCached = (cacheKey) => {
+    if (isCacheValid(cacheKey)) {
+        console.log(`✓ Cache hit for ${cacheKey}`);
+        return cache[cacheKey].data;
+    }
+    return null;
+};
+
+const setCache = (cacheKey, data) => {
+    cache[cacheKey] = { data, timestamp: Date.now() };
+    console.log(`✓ Cached ${cacheKey} (${data?.length || 0} items)`);
+};
+
+const clearCache = (cacheKey) => {
+    if (cacheKey) {
+        cache[cacheKey] = { data: null, timestamp: 0 };
+        console.log(`✓ Cleared cache for ${cacheKey}`);
+    } else {
+        // Clear all caches
+        Object.keys(cache).forEach(key => {
+            cache[key] = { data: null, timestamp: 0 };
+        });
+        console.log('✓ Cleared all caches');
+    }
+};
+
+// Export cache utilities
+export const cacheUtils = { getCached, setCache, clearCache, isCacheValid };
+
+/**
  * Generic database service factory for personal_finance schema
  * Handles automatic snake_case <-> camelCase conversion
  */
@@ -102,9 +148,6 @@ class SupabaseService {
             if (!snakeCaseRecord.user_id) {
                 snakeCaseRecord.user_id = user.id;
             }
-
-            // Log what is being sent to the transaction table
-            console.log('[TransactionService.add] Sending to transaction table:', snakeCaseRecord);
 
             const { data, error } = await this.table()
                 .insert([snakeCaseRecord])
@@ -366,10 +409,15 @@ class MerchantService extends SupabaseService {
     }
 
     /**
-     * Get all merchants (no user filter)
+     * Get all merchants (no user filter) with caching
      */
     async getAll() {
         try {
+            // Try cache first
+            const cached = getCached('merchants');
+            if (cached) return cached;
+
+            // Fetch from database
             const { data, error } = await this.table()
                 .select(`
                     *,
@@ -382,7 +430,10 @@ class MerchantService extends SupabaseService {
                 .order('normalized_name');
 
             if (error) throw error;
-            return data || [];
+
+            const result = data || [];
+            setCache('merchants', result);
+            return result;
         } catch (error) {
             console.error('Error fetching merchants:', error);
             throw error;
@@ -391,21 +442,59 @@ class MerchantService extends SupabaseService {
 
     /**
      * Find merchant by raw name or alias
+     * Uses database function if available, falls back to JS filtering
      */
     async getByRawNameOrAlias(rawName) {
         try {
             if (!rawName) return null;
 
-            const lowerName = rawName.toLowerCase();
+            // Try using the database function (if you've created it)
+            const { data: funcResult, error: funcError } = await supabase
+                .rpc('search_merchant_by_name_or_alias', {
+                    search_term: rawName
+                });
 
-            const { data, error } = await this.table()
+            // If function exists and returns result, use it
+            if (!funcError && funcResult && funcResult.length > 0) {
+                return funcResult[0];
+            }
+
+            // Fallback: First try exact normalized_name match (case-insensitive)
+            let { data, error } = await this.table()
                 .select('*')
-                .or(`normalized_name.ilike.${lowerName},aliases.cs.{${rawName}}`)
-                .limit(1)
-                .single();
+                .ilike('normalized_name', rawName)
+                .limit(1);
 
-            if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
-            return data || null;
+            if (error) {
+                console.error('Error searching by normalized_name:', error);
+            }
+
+            if (data && data.length > 0) {
+                return data[0];
+            }
+
+            // Final fallback: Search aliases in JavaScript
+            const { data: allMerchants, error: allError } = await this.table()
+                .select('*');
+
+            if (allError) {
+                console.error('Error fetching all merchants:', allError);
+                return null;
+            }
+
+            // Search aliases in JavaScript
+            const lowerRawName = rawName.toLowerCase();
+            const found = allMerchants?.find(merchant => {
+                if (Array.isArray(merchant.aliases)) {
+                    return merchant.aliases.some(alias =>
+                        alias.toLowerCase() === lowerRawName
+                    );
+                }
+                return false;
+            });
+
+            return found || null;
+
         } catch (error) {
             console.error('Error finding merchant:', error);
             return null;
@@ -425,6 +514,7 @@ class MerchantService extends SupabaseService {
                 .single();
 
             if (error) throw error;
+            clearCache('merchants');
             return data;
         } catch (error) {
             console.error('Error adding merchant:', error);
@@ -442,16 +532,24 @@ class CategoryService extends SupabaseService {
     }
 
     /**
-     * Get all categories (no user filter)
+     * Get all categories (no user filter) with caching
      */
     async getAll() {
         try {
+            // Try cache first
+            const cached = getCached('categories');
+            if (cached) return cached;
+
+            // Fetch from database
             const { data, error } = await this.table()
                 .select('*')
                 .order('name');
 
             if (error) throw error;
-            return data || [];
+
+            const result = data || [];
+            setCache('categories', result);
+            return result;
         } catch (error) {
             console.error('Error fetching categories:', error);
             throw error;
@@ -471,6 +569,7 @@ class CategoryService extends SupabaseService {
                 .single();
 
             if (error) throw error;
+            clearCache('categories');
             return data;
         } catch (error) {
             console.error('Error adding category:', error);
@@ -616,10 +715,48 @@ class ProductMetadataService extends SupabaseService {
     }
 }
 
+/**
+ * Chart of Accounts Service with caching
+ */
+class ChartOfAccountsService extends SupabaseService {
+    constructor() {
+        super('chart_of_accounts');
+    }
+
+    async getAll() {
+        // Try cache first
+        const cached = getCached('chartOfAccounts');
+        if (cached) return cached;
+
+        // Fetch from database
+        const data = await super.getAll();
+        setCache('chartOfAccounts', data);
+        return data;
+    }
+
+    async add(item) {
+        const result = await super.add(item);
+        clearCache('chartOfAccounts');
+        return result;
+    }
+
+    async update(id, updates) {
+        const result = await super.update(id, updates);
+        clearCache('chartOfAccounts');
+        return result;
+    }
+
+    async delete(id) {
+        const result = await super.delete(id);
+        clearCache('chartOfAccounts');
+        return result;
+    }
+}
+
 // Export service instances
 export const supabaseAccountsDB = new SupabaseService('accounts');
 export const supabaseTransactionsDB = new TransactionService();
-export const supabaseChartOfAccountsDB = new SupabaseService('chart_of_accounts');
+export const supabaseChartOfAccountsDB = new ChartOfAccountsService();
 export const supabaseTransactionSplitDB = new TransactionSplitService();
 export const supabaseMerchantDB = new MerchantService();
 export const supabaseCategoryDB = new CategoryService();

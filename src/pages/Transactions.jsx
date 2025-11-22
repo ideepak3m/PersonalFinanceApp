@@ -1,426 +1,502 @@
-// Helper: check if description contains any merchant normalized_name (case-insensitive substring)
-const descriptionContainsMerchant = (description, merchants) => {
-    if (!description) return false;
-    const descLower = description.toLowerCase();
-    for (const merchant of merchants) {
-        const name = merchant.normalized_name;
-        if (name && descLower.includes(name.toLowerCase())) {
-            return true;
-        }
-    }
-    return false;
-};
-// src/pages/Transactions.jsx
+// src/pages/Transactions.jsx - Updated with merchant/category split logic
 
 import React, { useEffect, useState } from 'react';
 import { TransactionUpload } from '../components/transactions/TransactionUpload';
-import { TransactionTable } from '../components/transactions/TransactionTable';
 import { SplitModal } from '../components/transactions/SplitModal';
 import transactionService from '../services/transactionService';
+import { transactionLogic } from '../services/transactionBusinessLogic';
 import {
     supabaseAccountsDB,
     supabaseTransactionsDB,
     supabaseChartOfAccountsDB,
-    supabaseTransactionSplitDB,
     supabaseMerchantDB,
     supabaseCategoryDB
 } from '../services/supabaseDatabase';
+import { Search, Edit2, Trash2, Save, Split } from 'lucide-react';
 
 export const Transactions = () => {
-
-    const PAGE_SIZE = 10;
-
     const [accounts, setAccounts] = useState([]);
     const [transactions, setTransactions] = useState([]);
-    const [refresh, setRefresh] = useState(0);
-
-    const [pendingImports, setPendingImports] = useState([]);
     const [chartOfAccounts, setChartOfAccounts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [merchants, setMerchants] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [refresh, setRefresh] = useState(0);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedAccount, setSelectedAccount] = useState('all');
 
+    // Pending transactions (not saved to DB yet)
+    const [pendingTransactions, setPendingTransactions] = useState([]);
+
+    // Split modal
+    const [splitTransaction, setSplitTransaction] = useState(null);
     const [showSplitModal, setShowSplitModal] = useState(false);
-    const [splitModalTxn, setSplitModalTxn] = useState(null);
-    const [splitModalCallback, setSplitModalCallback] = useState(() => null);
 
-    const [categoryPrompt, setCategoryPrompt] = useState(false);
-    const [unknownMerchant, setUnknownMerchant] = useState(null);
-    const [unknownMerchantIdx, setUnknownMerchantIdx] = useState(null);
-    const [selectedCategoryId, setSelectedCategoryId] = useState('');
-
-    // --------------------------------------------------
-    // LOAD INITIAL DATA
-    // --------------------------------------------------
+    // Load data
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [accs, txns, coa, cats, merchs] = await Promise.all([
-                    supabaseAccountsDB.getAll(),
-                    supabaseTransactionsDB.getAllWithRelations(),
-                    supabaseChartOfAccountsDB.getAll(),
-                    supabaseCategoryDB.getAll(),
-                    supabaseMerchantDB.getAll()
-                ]);
-
-                setAccounts(accs || []);
-                setTransactions(txns || []);
-                setChartOfAccounts(coa || []);
-                setCategories(cats || []);
-                setMerchants(merchs || []);
-            } catch (err) {
-                console.error(err);
-                alert('Failed to load data.');
-            }
-        };
-
-        fetchData();
+        loadData();
     }, [refresh]);
 
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            const [accs, txns, coa, cats, merchs] = await Promise.all([
+                supabaseAccountsDB.getAll(),
+                supabaseTransactionsDB.getAllWithRelations(),
+                supabaseChartOfAccountsDB.getAll(),
+                supabaseCategoryDB.getAll(),
+                supabaseMerchantDB.getAll()
+            ]);
 
-    // --------------------------------------------------
-    // HELPERS
-    // --------------------------------------------------
-    const isValidUUID = (uuid) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid);
+            setAccounts(accs || []);
+            setTransactions(txns || []);
 
-    const findMerchant = async (rawName) => {
-        if (!rawName) return null;
+            // Sort Chart of Accounts alphabetically by NAME
+            const sortedCoa = (coa || []).sort((a, b) => {
+                return (a.name || '').localeCompare(b.name || '');
+            });
+            setChartOfAccounts(sortedCoa);
 
-        const lower = rawName.toLowerCase();
-
-        let merchant =
-            merchants.find(m => m.normalized_name?.toLowerCase() === lower) ||
-            merchants.find(
-                m => Array.isArray(m.aliases) && m.aliases.map(a => a.toLowerCase()).includes(lower)
-            );
-
-        if (merchant) return merchant;
-
-        return await supabaseMerchantDB.getByRawNameOrAlias(rawName);
+            setCategories(cats || []);
+            setMerchants(merchs || []);
+        } catch (error) {
+            console.error('Error loading data:', error);
+            alert('Failed to load data');
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const getCategoryById = (id) => categories.find(c => c.id === id);
+    // Get suspense account
+    const suspenseAccount = chartOfAccounts.find(coa =>
+        coa.name.toLowerCase() === 'suspense' ||
+        coa.code.toLowerCase() === 'suspense'
+    );
 
-    const getSuggestedCoAId = (desc) => {
-        if (!desc || !chartOfAccounts.length) return '';
-        const lower = desc.toLowerCase();
-        const match = chartOfAccounts.find(coa =>
-            lower.includes(coa.name.toLowerCase()) ||
-            (coa.description && lower.includes(coa.description.toLowerCase()))
-        );
-        return match ? match.id : '';
+    // Check if merchant/category requires split based on description
+    const checkIfSplitRequired = (description) => {
+        if (!description) return false;
+
+        const descLower = description.toLowerCase().trim();
+
+        // Find matching merchant by checking if description contains merchant name
+        const matchingMerchant = merchants.find(merchant => {
+            const merchantName = (merchant.name || '').toLowerCase().trim();
+            const merchantNormalizedName = (merchant.normalized_name || '').toLowerCase().trim();
+
+            return descLower.includes(merchantName) ||
+                descLower.includes(merchantNormalizedName) ||
+                merchantName.includes(descLower);
+        });
+
+        if (matchingMerchant && matchingMerchant.category_id) {
+            const category = categories.find(c => c.id === matchingMerchant.category_id);
+            return category?.is_split_enabled === true;
+        }
+
+        return false;
     };
 
-    const normalizeTransaction = (txn) => ({
-        user_id: txn.user_id,
-        date: txn.date,
-        raw_merchant_name: txn.description || txn.raw_merchant_name,
-        normalized_merchant_id: txn.normalized_merchant_id,
-        amount: txn.amount,
-        currency: txn.currency || 'USD',
-        is_split: txn.is_split || false,
-        notes: txn.notes || null,
-        account_id: txn.account_id,
-        category_id: txn.category_id,
-        chart_of_account_id: txn.chart_of_account_id || null,
-        split_chart_of_account_id: txn.split_chart_of_account_id || null,
-        description: txn.description,
-        memo: txn.memo || null,
-        product_id: txn.product_id || null,
-        type: txn.type || null
-    });
-
-
-    // --------------------------------------------------
-    // FILE UPLOAD
-    // --------------------------------------------------
+    // Handle file upload - DON'T save anything yet
     const handleUpload = async (file, accountId) => {
         try {
-            let mapped = [];
+            setLoading(true);
 
-            if (file.name.toLowerCase().endsWith('.csv')) {
-                const csv = await transactionService.parseCSV(file);
-                mapped = transactionService.mapCSVToTransactions(csv, accountId);
-            } else if (file.name.endsWith('.qbo') || file.name.endsWith('.qfx')) {
+            let mappedTransactions = [];
+            const fileName = file.name.toLowerCase();
+
+            if (fileName.endsWith('.csv')) {
+                const csvData = await transactionService.parseCSV(file);
+                mappedTransactions = transactionService.mapCSVToTransactions(csvData, accountId);
+            } else if (fileName.endsWith('.qbo') || fileName.endsWith('.qfx')) {
                 const data = await transactionService.parseQBOQFX(file);
-                mapped = transactionService.mapQBOQFXToTransactions(data, accountId);
+                mappedTransactions = transactionService.mapQBOQFXToTransactions(data, accountId);
             } else {
-                alert("Unsupported file format.");
+                alert('Unsupported file format');
                 return;
             }
 
-            await processTransactions(mapped, 0);
-
-        } catch (err) {
-            console.error(err);
-            alert("File parsing error.");
-        }
-    };
-
-
-    // --------------------------------------------------
-    // PROCESS IMPORTED TRANSACTIONS
-    // --------------------------------------------------
-    const processTransactions = async (txns, startIdx) => {
-        for (let i = startIdx; i < txns.length; i++) {
-            const txn = txns[i];
-            const rawName = txn.description?.trim();
-            const merchant = await findMerchant(rawName);
-
-            if (!merchant) {
-                setUnknownMerchant(rawName);
-                setUnknownMerchantIdx(i);
-                setCategoryPrompt(true);
-                setPendingImports(txns);
-                return;
-            }
-
-            txn.normalized_merchant_id = merchant.id;
-            txn.category_id = merchant.category_id;
-            txn.account_id = txn.account_id || txn.accountId;
-            txn.is_split = false;
-
-            const category = getCategoryById(merchant.category_id);
-
-            // Only open split modal if explicitly triggered, not on page load
-            // (No auto-open here)
-
-            txn.chart_of_account_id = getSuggestedCoAId(txn.description);
-        }
-
-        setPendingImports(txns);
-    };
-
-
-    // --------------------------------------------------
-    // SAVE SPLIT FOR A NEW TRANSACTION
-    // --------------------------------------------------
-    const handleSplitSave = async (txn, splits, allTxns, idx) => {
-        try {
-            if (!splits.length) throw new Error("No splits provided");
-
-            const total = splits.reduce((s, x) => s + (parseFloat(x.percent) || 0), 0);
-            if (Math.abs(total - 100) > 0.01) throw new Error("Splits must total 100%");
-
-            splits.forEach(s => {
-                if (!isValidUUID(s.chartOfAccountId))
-                    throw new Error("Invalid Chart of Account");
-            });
-
-            const txnToSave = normalizeTransaction({
-                ...txn,
-                is_split: true,
-                chart_of_account_id: null,
-                split_chart_of_account_id: splits[0].chartOfAccountId
-            });
-
-            const saved = await supabaseTransactionsDB.add(txnToSave);
-
-            const splitRecords = splits.map(s => ({
-                transaction_id: saved.id,
-                category_id: txn.category_id,
-                percentage: parseFloat(s.percent),
-                amount: parseFloat(s.percent) / 100 * Math.abs(txn.amount),
-                chart_of_account_id: s.chartOfAccountId,
-                belief_tag: null
-            }));
-
-            await supabaseTransactionSplitDB.bulkAdd(splitRecords);
-
-            const next = idx + 1;
-
-            if (next < allTxns.length) {
-                await processTransactions(allTxns, next);
-            }
-
-            setShowSplitModal(false);
-            setSplitModalTxn(null);
-
-        } catch (err) {
-            console.error(err);
-            alert(err.message);
-        }
-    };
-
-
-    // --------------------------------------------------
-    // SAVE SPLITS FOR EXISTING TRANSACTION
-    // --------------------------------------------------
-    const handleSplitSaveExisting = async (txn, splits) => {
-        try {
-            if (!splits.length) throw new Error("No splits provided");
-
-            const total = splits.reduce((s, x) => s + (parseFloat(x.percent) || 0), 0);
-            if (Math.abs(total - 100) > 0.01) throw new Error("Splits must total 100%");
-
-            for (const s of splits)
-                if (!isValidUUID(s.chartOfAccountId))
-                    throw new Error("Invalid Chart of Account");
-
-            await supabaseTransactionsDB.update(txn.id, {
-                is_split: true,
-                chart_of_account_id: null,
-                split_chart_of_account_id: splits[0].chartOfAccountId
-            });
-
-            await supabaseTransactionSplitDB.deleteByTransactionId(txn.id);
-
-            const splitRecords = splits.map(s => ({
-                transaction_id: txn.id,
-                percentage: parseFloat(s.percent),
-                amount: parseFloat(s.percent) / 100 * Math.abs(txn.amount),
-                category_id: txn.category_id,
-                chart_of_account_id: s.chartOfAccountId,
-                belief_tag: null
-            }));
-
-            await supabaseTransactionSplitDB.bulkAdd(splitRecords);
-
-            setShowSplitModal(false);
-            setRefresh(r => r + 1);
-            alert("Splits updated!");
-
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-
-    // --------------------------------------------------
-    // UNKNOWN MERCHANT CATEGORY
-    // --------------------------------------------------
-    const handleUnknownMerchantCategory = async () => {
-        if (!selectedCategoryId || unknownMerchantIdx == null) return;
-
-        try {
-            const merchant = await supabaseMerchantDB.add({
-                normalized_name: unknownMerchant,
-                category_id: selectedCategoryId,
-                aliases: [unknownMerchant]
-            });
-
-            const updated = [...pendingImports];
-            updated[unknownMerchantIdx].normalized_merchant_id = merchant.id;
-            updated[unknownMerchantIdx].category_id = selectedCategoryId;
-
-            setCategoryPrompt(false);
-            setUnknownMerchant(null);
-            setUnknownMerchantIdx(null);
-            setSelectedCategoryId('');
-
-            const merchs = await supabaseMerchantDB.getAll();
-            setMerchants(merchs);
-
-            await processTransactions(updated, unknownMerchantIdx);
-
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-
-    // --------------------------------------------------
-    // CONFIRM IMPORT
-    // --------------------------------------------------
-    const handleConfirmImport = async () => {
-        try {
-            const valid = pendingImports.filter(
-                txn => txn.chart_of_account_id && !txn.is_split
+            // Enrich and categorize
+            const enriched = await transactionLogic.enrichTransactions(
+                mappedTransactions,
+                merchants,
+                categories,
+                chartOfAccounts
             );
 
-            if (!valid.length) {
-                alert("Assign Chart of Account to continue.");
+            // Add temporary IDs for tracking and check split requirement
+            const withTempIds = enriched.map((txn, idx) => ({
+                ...txn,
+                tempId: `temp_${Date.now()}_${idx}`,
+                isPending: true,
+                requiresSplit: checkIfSplitRequired(txn.description || txn.raw_merchant_name),
+                splitData: null // Will hold split information when user completes split
+            }));
+
+            // Add to pending list (NOT saved to DB yet)
+            setPendingTransactions(prev => [...prev, ...withTempIds]);
+
+            alert(
+                `Loaded ${withTempIds.length} transactions. ` +
+                `Review and click "Save All" when ready.`
+            );
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            alert('Failed to upload: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Bulk save all pending transactions
+    const handleBulkSave = async () => {
+        try {
+            setLoading(true);
+
+            // Filter: only transactions that don't require split OR have completed split
+            const readyToSave = pendingTransactions.filter(txn => {
+                if (txn.requiresSplit) {
+                    return txn.splitData !== null; // Must have split data
+                }
+                return txn.chart_of_account_id; // Must have COA assigned
+            });
+
+            if (readyToSave.length === 0) {
+                alert('No transactions ready to save. Assign Chart of Accounts or complete splits first.');
                 return;
             }
 
-            const payload = valid.map(normalizeTransaction);
+            // Prepare transactions for save
+            const toSave = readyToSave.map(txn => {
+                if (txn.splitData) {
+                    // Transaction with split
+                    return {
+                        ...txn,
+                        is_split: true,
+                        splits: txn.splitData
+                    };
+                }
+                return txn;
+            });
 
-            await supabaseTransactionsDB.bulkAdd(payload);
+            // Bulk save (you'll need to implement this in transactionLogic)
+            const saved = await transactionLogic.bulkSaveTransactions(toSave);
 
-            alert("Transactions imported!");
-            setPendingImports([]);
+            // Remove saved transactions from pending
+            const savedTempIds = new Set(readyToSave.map(t => t.tempId));
+            setPendingTransactions(prev =>
+                prev.filter(t => !savedTempIds.has(t.tempId))
+            );
+
             setRefresh(r => r + 1);
+            alert(`Saved ${saved.length} transactions!`);
 
-        } catch (err) {
-            alert(err.message);
+        } catch (error) {
+            console.error('Bulk save error:', error);
+            alert('Failed to save: ' + error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
-
-    // --------------------------------------------------
-    // TABLE ACTIONS
-    // --------------------------------------------------
-    const handleDelete = async (id) => {
-        await supabaseTransactionsDB.delete(id);
-        setRefresh(r => r + 1);
-    };
-
-    const handleEdit = (txn) => {
-        alert("Edit modal not implemented yet.");
-    };
-
-    const handleSplitExisting = (txn) => {
-        const category = getCategoryById(txn.category_id);
-        if (!category?.is_split_enabled) {
-            alert("This category is not split-enabled.");
-            return;
-        }
-
-        setSplitModalTxn({ txn });
-        setSplitModalCallback(() =>
-            (splits) => handleSplitSaveExisting(txn, splits)
+    // Handle COA change for pending transaction
+    const handleCoAChange = (txn, coaId) => {
+        setPendingTransactions(prev =>
+            prev.map(t =>
+                t.tempId === txn.tempId
+                    ? { ...t, chart_of_account_id: coaId }
+                    : t
+            )
         );
+    };
+
+    // Handle split click
+    const handleSplitClick = (txn) => {
+        setSplitTransaction(txn);
         setShowSplitModal(true);
     };
 
+    // Handle save split - store in variable, don't save to DB yet
+    const handleSaveSplit = (splits) => {
+        try {
+            const txn = splitTransaction;
 
-    // --------------------------------------------------
-    // RENDER
-    // --------------------------------------------------
+            if (txn.isPending) {
+                // For pending transactions, just store the split data
+                setPendingTransactions(prev =>
+                    prev.map(t =>
+                        t.tempId === txn.tempId
+                            ? {
+                                ...t,
+                                splitData: splits,
+                                is_split: true
+                            }
+                            : t
+                    )
+                );
+                alert('Split saved! Will be written to database when you click "Save All".');
+            } else {
+                // For existing transactions, update immediately
+                // (You can modify this if you want to batch these too)
+                transactionLogic.updateSplitTransaction(txn.id, txn, splits);
+                setRefresh(r => r + 1);
+                alert('Split updated!');
+            }
+
+            setShowSplitModal(false);
+            setSplitTransaction(null);
+
+        } catch (error) {
+            console.error('Split error:', error);
+            alert('Failed to save split: ' + error.message);
+        }
+    };
+
+    // Handle delete
+    const handleDelete = async (txn) => {
+        if (!window.confirm('Delete this transaction?')) return;
+
+        try {
+            if (txn.id) {
+                // Saved transaction - delete from DB
+                await supabaseTransactionsDB.delete(txn.id);
+                setRefresh(r => r + 1);
+            } else {
+                // Pending transaction - just remove from list
+                setPendingTransactions(prev =>
+                    prev.filter(t => t.tempId !== txn.tempId)
+                );
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            alert('Failed to delete');
+        }
+    };
+
+    // Get row color
+    const getRowClassName = (txn) => {
+        if (txn.isPending) {
+            if (txn.requiresSplit && !txn.splitData) {
+                return 'bg-yellow-50 hover:bg-yellow-100 border-l-4 border-yellow-400';
+            }
+            return 'bg-orange-50 hover:bg-orange-100 border-l-4 border-orange-400';
+        }
+        if (txn.is_split) {
+            return 'bg-purple-50 hover:bg-purple-100';
+        }
+        const isSuspense = txn.chart_of_account_id === suspenseAccount?.id;
+        if (!txn.chart_of_account_id || isSuspense) {
+            return 'bg-yellow-50 hover:bg-yellow-100';
+        }
+        return 'bg-green-50 hover:bg-green-100';
+    };
+
+    // Combine pending and saved transactions for display
+    const allTransactions = [...pendingTransactions, ...transactions];
+
+    // Filter transactions
+    const filteredTransactions = allTransactions.filter(txn => {
+        if (selectedAccount !== 'all' && txn.account_id !== selectedAccount) {
+            return false;
+        }
+        if (searchTerm) {
+            const lower = searchTerm.toLowerCase();
+            return (
+                txn.description?.toLowerCase().includes(lower) ||
+                txn.raw_merchant_name?.toLowerCase().includes(lower)
+            );
+        }
+        return true;
+    });
+
+    // Count pending transactions that are ready to save
+    const readyToSaveCount = pendingTransactions.filter(txn => {
+        if (txn.requiresSplit) {
+            return txn.splitData !== null;
+        }
+        return txn.chart_of_account_id;
+    }).length;
+
     return (
         <div className="space-y-6">
-
-            <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">Transactions</h1>
-                <p className="text-gray-600">Upload and manage your financial transactions</p>
+            {/* Header */}
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900">Transactions</h1>
+                    <p className="text-gray-600 mt-1">
+                        {filteredTransactions.length} transactions
+                        {pendingTransactions.length > 0 && (
+                            <span className="ml-2 text-orange-600 font-medium">
+                                ({pendingTransactions.length} pending)
+                            </span>
+                        )}
+                    </p>
+                </div>
+                <div className="flex gap-3">
+                    {pendingTransactions.length > 0 && (
+                        <button
+                            onClick={handleBulkSave}
+                            disabled={readyToSaveCount === 0}
+                            className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                        >
+                            <Save className="w-5 h-5" />
+                            Save All ({readyToSaveCount})
+                        </button>
+                    )}
+                    <TransactionUpload
+                        accounts={accounts}
+                        onUpload={handleUpload}
+                        loading={loading}
+                    />
+                </div>
             </div>
 
-            <TransactionUpload accounts={accounts} onUpload={handleUpload} />
+            {/* Filters */}
+            <div className="flex gap-4 items-center bg-white p-4 rounded-lg shadow border">
+                <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Search transactions..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                    />
+                </div>
+                <select
+                    value={selectedAccount}
+                    onChange={(e) => setSelectedAccount(e.target.value)}
+                    className="border rounded-lg px-3 py-2"
+                >
+                    <option value="all">All Accounts</option>
+                    {accounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                            {acc.name}
+                        </option>
+                    ))}
+                </select>
+            </div>
 
-            {/* PENDING IMPORTS TABLE */}
-            {pendingImports.length > 0 && !categoryPrompt && !showSplitModal && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-yellow-900 mb-2">Review & Assign Chart of Account</h3>
+            {/* Legend */}
+            <div className="flex gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-orange-200 border-l-4 border-orange-400"></div>
+                    <span>Pending (Not Saved)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-yellow-200 border-l-4 border-yellow-400"></div>
+                    <span>Requires Split</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-green-200 border"></div>
+                    <span>Categorized</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-purple-200 border"></div>
+                    <span>Split Transaction</span>
+                </div>
+            </div>
 
-                    <table className="w-full">
-                        <thead className="bg-yellow-100">
-                            <tr>
-                                <th className="px-4 py-2 text-xs">Date</th>
-                                <th className="px-4 py-2 text-xs">Description</th>
-                                <th className="px-4 py-2 text-xs">Amount</th>
-                                <th className="px-4 py-2 text-xs">Chart of Account</th>
-                            </tr>
-                        </thead>
+            {/* Info banner for pending transactions */}
+            {pendingTransactions.length > 0 && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="font-semibold text-orange-900">
+                                {pendingTransactions.length} transactions pending
+                            </h3>
+                            <p className="text-sm text-orange-700 mt-1">
+                                Assign Chart of Accounts or complete splits, then click "Save All" to save to database.
+                                {readyToSaveCount > 0 && (
+                                    <span className="font-medium"> {readyToSaveCount} ready to save.</span>
+                                )}
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleBulkSave}
+                            disabled={readyToSaveCount === 0}
+                            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                        >
+                            Save All ({readyToSaveCount})
+                        </button>
+                    </div>
+                </div>
+            )}
 
-                        <tbody>
-                            {pendingImports.map((txn, idx) => (
-                                <tr key={idx} className="border-b">
-                                    <td className="px-4 py-2">{txn.date}</td>
-                                    <td className="px-4 py-2">{txn.description}</td>
-                                    <td className="px-4 py-2">
-                                        ${Math.abs(txn.amount).toFixed(2)}
-                                    </td>
+            {/* Transactions Table */}
+            <div className="bg-white rounded-lg shadow border overflow-hidden">
+                <table className="w-full">
+                    <thead className="bg-gray-50 border-b">
+                        <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Date
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Account
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Description
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Chart of Account
+                            </th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                                Amount
+                            </th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredTransactions.map((txn) => (
+                            <tr key={txn.id || txn.tempId} className={getRowClassName(txn)}>
+                                <td className="px-4 py-3 text-sm">
+                                    {txn.date}
+                                </td>
 
-                                    <td className="px-4 py-2">
+                                <td className="px-4 py-3 text-sm">
+                                    {accounts.find(a => a.id === txn.account_id)?.name || '-'}
+                                </td>
+
+                                <td className="px-4 py-3 text-sm">
+                                    <div className="font-medium text-gray-900">
+                                        {txn.description || txn.raw_merchant_name}
+                                    </div>
+                                    {txn.isPending && (
+                                        <span className="inline-block mt-1 px-2 py-0.5 bg-orange-200 text-orange-800 text-xs rounded">
+                                            Pending
+                                        </span>
+                                    )}
+                                    {txn.requiresSplit && !txn.splitData && (
+                                        <span className="inline-block mt-1 ml-2 px-2 py-0.5 bg-yellow-200 text-yellow-800 text-xs rounded">
+                                            Split Required
+                                        </span>
+                                    )}
+                                    {txn.splitData && (
+                                        <span className="inline-block mt-1 ml-2 px-2 py-0.5 bg-purple-200 text-purple-800 text-xs rounded">
+                                            Split Complete
+                                        </span>
+                                    )}
+                                    {txn.memo && (
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            {txn.memo}
+                                        </div>
+                                    )}
+                                </td>
+
+                                <td className="px-4 py-3 text-sm">
+                                    {txn.requiresSplit ? (
+                                        <span className="text-purple-600 font-medium italic">
+                                            {txn.splitData ? 'Split Complete' : 'Pending Split'}
+                                        </span>
+                                    ) : (
                                         <select
                                             value={txn.chart_of_account_id || ''}
-                                            onChange={(e) =>
-                                                setPendingImports(prev =>
-                                                    prev.map((t, i) =>
-                                                        i === idx ? { ...t, chart_of_account_id: e.target.value } : t
-                                                    )
-                                                )
-                                            }
-                                            className="border rounded px-2 py-1 w-full"
+                                            onChange={(e) => handleCoAChange(txn, e.target.value)}
+                                            className="border rounded px-2 py-1 text-sm w-full bg-white"
+                                            disabled={txn.is_split}
                                         >
                                             <option value="">Select...</option>
                                             {chartOfAccounts.map(coa => (
@@ -429,92 +505,73 @@ export const Transactions = () => {
                                                 </option>
                                             ))}
                                         </select>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                                    )}
+                                </td>
 
-                    <button
-                        onClick={handleConfirmImport}
-                        className="mt-4 px-6 py-2 bg-green-600 text-white rounded"
-                    >
-                        Confirm Import
-                    </button>
-                </div>
-            )}
+                                <td className="px-4 py-3 text-sm text-right">
+                                    <span className={
+                                        txn.amount >= 0
+                                            ? 'text-green-600 font-semibold'
+                                            : 'text-red-600 font-semibold'
+                                    }>
+                                        ${Math.abs(txn.amount).toFixed(2)}
+                                    </span>
+                                </td>
 
-            {/* UNKNOWN MERCHANT CATEGORY PROMPT */}
-            {categoryPrompt && (
-                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-                    <div className="bg-white rounded p-6 shadow-lg min-w-[350px]">
-                        <h2 className="text-lg font-semibold mb-4">Categorize Merchant</h2>
+                                <td className="px-4 py-3 text-sm text-center">
+                                    <div className="flex items-center justify-center gap-2">
+                                        {txn.requiresSplit && (
+                                            <button
+                                                onClick={() => handleSplitClick(txn)}
+                                                className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs font-medium flex items-center gap-1"
+                                            >
+                                                <Split className="w-3 h-3" />
+                                                {txn.splitData ? 'Edit Split' : 'Split'}
+                                            </button>
+                                        )}
+                                        {txn.is_split && !txn.requiresSplit && (
+                                            <button
+                                                onClick={() => handleSplitClick(txn)}
+                                                className="text-purple-600 hover:text-purple-800"
+                                                title="Edit Split"
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => handleDelete(txn)}
+                                            className="text-red-600 hover:text-red-800"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
 
-                        <p className="mb-2">
-                            Merchant <strong>{unknownMerchant}</strong> not found.
-                            Select a category:
-                        </p>
-
-                        <select
-                            value={selectedCategoryId}
-                            onChange={(e) => setSelectedCategoryId(e.target.value)}
-                            className="border rounded px-2 py-1 w-full mb-4"
-                        >
-                            <option value="">Select category...</option>
-                            {categories.map(cat => (
-                                <option key={cat.id} value={cat.id}>
-                                    {cat.name}
-                                </option>
-                            ))}
-                        </select>
-
-                        <div className="flex gap-2 justify-end">
-                            <button
-                                onClick={() => setCategoryPrompt(false)}
-                                className="px-4 py-2 bg-gray-300 rounded"
-                            >
-                                Cancel
-                            </button>
-
-                            <button
-                                onClick={handleUnknownMerchantCategory}
-                                disabled={!selectedCategoryId}
-                                className="px-4 py-2 bg-green-600 text-white rounded"
-                            >
-                                Save
-                            </button>
-                        </div>
+                {filteredTransactions.length === 0 && (
+                    <div className="px-6 py-12 text-center text-gray-500">
+                        No transactions found
                     </div>
-                </div>
-            )}
+                )}
+            </div>
 
-            {/* SPLIT MODAL */}
-            {showSplitModal && splitModalTxn && (
+            {/* Split Modal */}
+            {showSplitModal && splitTransaction && (
                 <SplitModal
-                    totalAmount={Math.abs(splitModalTxn.txn.amount)}
+                    totalAmount={Math.abs(splitTransaction.amount)}
                     chartOfAccounts={chartOfAccounts}
-                    onSave={splitModalCallback}
+                    existingSplits={splitTransaction.splitData || splitTransaction.splits}
+                    onSave={handleSaveSplit}
                     onClose={() => {
                         setShowSplitModal(false);
-                        setSplitModalTxn(null);
-                        setSplitModalCallback(() => null);
+                        setSplitTransaction(null);
                     }}
                 />
             )}
-
-            {/* TRANSACTION TABLE */}
-            <TransactionTable
-                transactions={transactions}
-                accounts={accounts}
-                onDelete={handleDelete}
-                onEdit={handleEdit}
-                onSplit={handleSplitExisting}
-                splitEnabledChecker={(txn) => {
-                    const cat = getCategoryById(txn.category_id);
-                    return cat?.is_split_enabled;
-                }}
-            />
-
         </div>
     );
 };

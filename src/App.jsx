@@ -14,6 +14,8 @@ import { Settings } from './pages/Settings';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
+import { AccountsDashboard } from './pages/AccountsDashboard';
+import { UncategorizedReceipts } from './components/transactions/UncategorizedReceipts';
 
 function App() {
   return (
@@ -41,12 +43,14 @@ function App() {
                         {/* Use a single-level Routes for main content */}
                         <Routes>
                           <Route path="/" element={<Dashboard />} />
-                          <Route path="accounts" element={<Accounts />} />
+                          {/* <Route path="accounts" element={<Accounts />} /> */}
                           <Route path="transactions" element={<Transactions />} />
                           <Route path="analytics" element={<Analytics />} />
                           <Route path="knowledge" element={<Knowledge />} />
                           <Route path="ai-advisor" element={<AIAdvisor />} />
                           <Route path="settings" element={<Settings />} />
+                          <Route path="accounts" element={<AccountsDashboard />} />
+                          <Route path="uncategorized-receipts/:accountId" element={<UncategorizedReceipts />} />
                         </Routes>
                       </main>
                     </div>

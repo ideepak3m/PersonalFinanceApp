@@ -1,47 +1,62 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Upload } from 'lucide-react';
 
-export const TransactionUpload = ({ accounts, onUpload }) => {
+export const TransactionUpload = ({ accounts, onUpload, account }) => {
     const [selectedAccount, setSelectedAccount] = useState('');
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef(null);
+
+    // Automatically set the account passed from the parent
+    useEffect(() => {
+        if (account?.id) {
+            setSelectedAccount(account.id);
+        }
+    }, [account]);
 
     const handleFileChange = (e) => {
         const selectedFile = e.target.files[0];
         if (!selectedFile) return;
+
         const validTypes = [
-            'text/csv',
-            'application/vnd.intu.qbo',
-            'application/x-qfx',
-            'application/xml',
-            'text/xml',
+            "text/csv",
+            "application/vnd.intu.qbo",
+            "application/x-qfx",
+            "application/xml",
+            "text/xml",
         ];
-        const validExtensions = ['.csv', '.qbo', '.qfx'];
+        const validExtensions = [".csv", ".qbo", ".qfx"];
         const fileName = selectedFile.name.toLowerCase();
         const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+
         if (validTypes.includes(selectedFile.type) || hasValidExtension) {
             setFile(selectedFile);
         } else {
-            alert('Please select a valid CSV, QBO, or QFX file');
+            alert("Please select a valid CSV, QBO, or QFX file");
         }
     };
 
     const handleUpload = async () => {
         if (!file || !selectedAccount) {
-            alert('Please select an account and a CSV file');
+            alert("Please select an account and a CSV file");
             return;
         }
 
         setUploading(true);
         try {
             await onUpload(file, selectedAccount);
+
+            // Reset state
             setFile(null);
-            setSelectedAccount('');
-            // Reset file input
-            document.getElementById('file-upload').value = '';
+            setSelectedAccount("");
+
+            // Clear file input using ref
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
         } catch (error) {
-            console.error('Upload error:', error);
-            alert('Failed to upload transactions. Please check the file format.');
+            console.error("Upload error:", error);
+            alert("Failed to upload transactions. Please check the file format.");
         } finally {
             setUploading(false);
         }
@@ -55,30 +70,34 @@ export const TransactionUpload = ({ accounts, onUpload }) => {
             </h2>
 
             <div className="space-y-4">
+                {/* ACCOUNT SELECT */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                         Select Account *
                     </label>
+
                     <select
                         value={selectedAccount}
                         onChange={(e) => setSelectedAccount(e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                         <option value="">Choose an account...</option>
-                        {accounts?.map(account => (
-                            <option key={account.id} value={account.id}>
-                                {account.name} ({account.country})
+
+                        {accounts?.map(acc => (
+                            <option key={acc.id} value={acc.id}>
+                                {acc.name} ({acc.country})
                             </option>
                         ))}
                     </select>
                 </div>
 
+                {/* FILE SELECT */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                         Upload CSV or QuickBooks File *
                     </label>
                     <input
-                        id="file-upload"
+                        ref={fileInputRef}
                         type="file"
                         accept=".csv,.qbo,.qfx"
                         onChange={handleFileChange}
@@ -91,14 +110,23 @@ export const TransactionUpload = ({ accounts, onUpload }) => {
                     )}
                 </div>
 
+                {/* HELP TEXT */}
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                     <h4 className="font-medium text-blue-900 mb-2">Supported Formats:</h4>
                     <ul className="text-sm text-blue-800 space-y-1">
-                        <li>• <b>CSV</b>: Required columns: <code className="bg-blue-100 px-1 rounded">date</code>, <code className="bg-blue-100 px-1 rounded">description</code>, <code className="bg-blue-100 px-1 rounded">amount</code>. Optional: <code className="bg-blue-100 px-1 rounded">category</code>. Date: YYYY-MM-DD or MM/DD/YYYY. Amount: positive for income, negative for expenses.</li>
-                        <li>• <b>QuickBooks (QBO/QFX)</b>: Export from QuickBooks or your bank. Transactions will be auto-mapped.</li>
+                        <li>
+                            • <b>CSV</b>: Required:
+                            <code className="bg-blue-100 px-1 rounded">date</code>,{" "}
+                            <code className="bg-blue-100 px-1 rounded">description</code>,{" "}
+                            <code className="bg-blue-100 px-1 rounded">amount</code>.
+                        </li>
+                        <li>
+                            • <b>QBO/QFX</b>: Export from your bank or QuickBooks.
+                        </li>
                     </ul>
                 </div>
 
+                {/* UPLOAD BUTTON */}
                 <button
                     onClick={handleUpload}
                     disabled={!file || !selectedAccount || uploading}
