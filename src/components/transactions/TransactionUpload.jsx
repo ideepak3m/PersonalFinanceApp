@@ -38,7 +38,7 @@ export const TransactionUpload = ({ accounts, onUpload, account }) => {
 
     const handleUpload = async () => {
         if (!file || !selectedAccount) {
-            alert("Please select an account and a CSV file");
+            alert("Please select an account and a file");
             return;
         }
 
@@ -56,7 +56,7 @@ export const TransactionUpload = ({ accounts, onUpload, account }) => {
             }
         } catch (error) {
             console.error("Upload error:", error);
-            alert("Failed to upload transactions. Please check the file format.");
+            alert("Failed to upload file. Please check the file format.");
         } finally {
             setUploading(false);
         }
@@ -115,13 +115,10 @@ export const TransactionUpload = ({ accounts, onUpload, account }) => {
                     <h4 className="font-medium text-blue-900 mb-2">Supported Formats:</h4>
                     <ul className="text-sm text-blue-800 space-y-1">
                         <li>
-                            • <b>CSV</b>: Required:
-                            <code className="bg-blue-100 px-1 rounded">date</code>,{" "}
-                            <code className="bg-blue-100 px-1 rounded">description</code>,{" "}
-                            <code className="bg-blue-100 px-1 rounded">amount</code>.
+                            • <b>CSV</b>: Upload the file, then map columns on the next screen.
                         </li>
                         <li>
-                            • <b>QBO/QFX</b>: Export from your bank or QuickBooks.
+                            • <b>QBO/QFX</b>: Standard format - imports directly.
                         </li>
                     </ul>
                 </div>
@@ -140,7 +137,7 @@ export const TransactionUpload = ({ accounts, onUpload, account }) => {
                     ) : (
                         <>
                             <Upload size={20} />
-                            Upload Transactions
+                            Upload File
                         </>
                     )}
                 </button>

@@ -1,10 +1,10 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { DollarSign, Upload, TrendingUp, BookOpen, MessageSquare, Settings, LogOut } from 'lucide-react';
+import { DollarSign, Upload, TrendingUp, BookOpen, MessageSquare, Settings, LogOut, RefreshCw, Split } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const iconMap = {
-    DollarSign, Upload, TrendingUp, BookOpen, MessageSquare, Settings
+    DollarSign, Upload, TrendingUp, BookOpen, MessageSquare, Settings, RefreshCw, Split
 };
 
 export const Sidebar = () => {
@@ -15,6 +15,8 @@ export const Sidebar = () => {
         { path: '/', label: 'Dashboard', icon: 'TrendingUp' },
         { path: '/accounts', label: 'Accounts', icon: 'DollarSign' },
         { path: '/transactions', label: 'Transactions', icon: 'Upload' },
+        { path: '/subscriptions', label: 'Subscriptions', icon: 'RefreshCw' },
+        { path: '/split-rules', label: 'Split Rules', icon: 'Split' },
         { path: '/analytics', label: 'Analytics', icon: 'TrendingUp' },
         { path: '/knowledge', label: 'Knowledge', icon: 'BookOpen' },
         { path: '/ai-advisor', label: 'AI Advisor', icon: 'MessageSquare' }

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { TransactionUpload } from '../components/transactions/TransactionUpload';
 import { SplitModal } from '../components/transactions/SplitModal';
+import { MerchantSelector } from '../components/transactions/MerchantSelector';
 import transactionService from '../services/transactionService';
 import { transactionLogic } from '../services/transactionBusinessLogic';
 import {
@@ -253,6 +254,34 @@ export const Transactions = () => {
         }
     };
 
+    // Handle merchant linking
+    const handleMerchantSelected = async (transactionId, merchantId) => {
+        try {
+            await supabaseTransactionsDB.update(transactionId, {
+                normalized_merchant_id: merchantId
+            });
+            await loadData();
+        } catch (error) {
+            console.error('Error linking merchant:', error);
+            alert('Failed to link merchant');
+        }
+    };
+
+    const handleCreateMerchant = async (friendlyName, rawName) => {
+        try {
+            const newMerchant = await supabaseMerchantDB.add({
+                normalized_name: friendlyName,
+                aliases: [rawName]
+            });
+            await loadData();
+            return newMerchant;
+        } catch (error) {
+            console.error('Error creating merchant:', error);
+            alert('Failed to create merchant');
+            return null;
+        }
+    };
+
     // Handle delete
     const handleDelete = async (txn) => {
         if (!window.confirm('Delete this transaction?')) return;
@@ -304,7 +333,8 @@ export const Transactions = () => {
             const lower = searchTerm.toLowerCase();
             return (
                 txn.description?.toLowerCase().includes(lower) ||
-                txn.raw_merchant_name?.toLowerCase().includes(lower)
+                txn.raw_merchant_name?.toLowerCase().includes(lower) ||
+                txn.merchant?.normalized_name?.toLowerCase().includes(lower)
             );
         }
         return true;
@@ -436,7 +466,10 @@ export const Transactions = () => {
                                 Account
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                Description
+                                Description (Raw)
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Merchant (Friendly)
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 Chart of Account
@@ -484,6 +517,21 @@ export const Transactions = () => {
                                             {txn.memo}
                                         </div>
                                     )}
+                                </td>
+
+                                <td className="px-4 py-3 text-sm">
+                                    <select
+                                        value={txn.normalized_merchant_id || ''}
+                                        onChange={(e) => handleMerchantSelected(txn.id, e.target.value || null)}
+                                        className="border rounded px-2 py-1 text-sm w-full bg-white"
+                                    >
+                                        <option value="">-- Select Merchant --</option>
+                                        {merchants.map(merchant => (
+                                            <option key={merchant.id} value={merchant.id}>
+                                                {merchant.normalized_name}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </td>
 
                                 <td className="px-4 py-3 text-sm">

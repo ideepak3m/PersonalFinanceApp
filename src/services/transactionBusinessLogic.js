@@ -10,6 +10,37 @@ import {
 
 class TransactionBusinessLogic {
     /**
+     * Normalize merchant name by removing common suffixes, numbers, and cleaning up
+     */
+    normalizeMerchantName(rawName) {
+        if (!rawName) return '';
+
+        let normalized = rawName.trim();
+
+        // Remove common patterns
+        normalized = normalized
+            // Remove store numbers like #010, W526, etc.
+            .replace(/\s*[#W]\d+\s*$/i, '')
+            .replace(/\s*#\d+$/i, '')
+            // Remove trailing numbers
+            .replace(/\s+\d+$/, '')
+            // Remove asterisks (often used in card transactions)
+            .replace(/\*/g, ' ')
+            // Remove multiple spaces
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        // Capitalize first letter of each word for consistency
+        normalized = normalized
+            .toLowerCase()
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+
+        return normalized;
+    }
+
+    /**
      * Validate UUID format
      */
     isValidUUID(uuid) {
@@ -208,8 +239,10 @@ class TransactionBusinessLogic {
      * Create or update merchant
      */
     async createMerchant(name, categoryId, aliases = []) {
+        const normalizedName = this.normalizeMerchantName(name);
+
         return await supabaseMerchantDB.add({
-            normalized_name: name,
+            normalized_name: normalizedName,
             category_id: categoryId,
             aliases: aliases.length > 0 ? aliases : [name]
         });

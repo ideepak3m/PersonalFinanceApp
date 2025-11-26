@@ -16,6 +16,9 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import { AccountsDashboard } from './pages/AccountsDashboard';
 import { UncategorizedReceipts } from './components/transactions/UncategorizedReceipts';
+import { ImportMapper } from './pages/ImportMapper';
+import SubscriptionManager from './components/SubscriptionManager';
+import MerchantSplitRules from './components/MerchantSplitRules';
 
 function App() {
   return (
@@ -51,6 +54,9 @@ function App() {
                           <Route path="settings" element={<Settings />} />
                           <Route path="accounts" element={<AccountsDashboard />} />
                           <Route path="uncategorized-receipts/:accountId" element={<UncategorizedReceipts />} />
+                          <Route path="import-mapper/:accountId" element={<ImportMapper />} />
+                          <Route path="subscriptions" element={<SubscriptionManager />} />
+                          <Route path="split-rules" element={<MerchantSplitRules />} />
                         </Routes>
                       </main>
                     </div>

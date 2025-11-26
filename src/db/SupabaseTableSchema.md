@@ -1,102 +1,748 @@
-| table_name        | column_name         | data_type                | character_maximum_length | is_nullable | column_default                                | ordinal_position |
-| ----------------- | ------------------- | ------------------------ | ------------------------ | ----------- | --------------------------------------------- | ---------------- |
-| accounts          | id                  | bigint                   | null                     | NO          | nextval('accounts_id_seq'::regclass)          | 1                |
-| accounts          | user_id             | uuid                     | null                     | YES         | null                                          | 2                |
-| accounts          | country             | text                     | null                     | NO          | null                                          | 3                |
-| accounts          | account_category    | text                     | null                     | NO          | null                                          | 4                |
-| accounts          | provider_id         | bigint                   | null                     | YES         | null                                          | 5                |
-| accounts          | account_number      | text                     | null                     | YES         | null                                          | 6                |
-| accounts          | name                | text                     | null                     | NO          | null                                          | 7                |
-| accounts          | currency            | text                     | null                     | YES         | 'USD'::text                                   | 8                |
-| accounts          | created_at          | timestamp with time zone | null                     | YES         | now()                                         | 9                |
-| accounts          | updated_at          | timestamp with time zone | null                     | YES         | now()                                         | 10               |
-| accounts          | balance             | real                     | null                     | YES         | '0'::real                                     | 11               |
-| accounts          | institution         | text                     | null                     | YES         | null                                          | 12               |
-| accounts          | type                | text                     | null                     | YES         | null                                          | 13               |
-| belief_tags       | id                  | uuid                     | null                     | NO          | gen_random_uuid()                             | 1                |
-| belief_tags       | name                | text                     | null                     | NO          | null                                          | 2                |
-| belief_tags       | description         | text                     | null                     | YES         | null                                          | 3                |
-| belief_tags       | category_id         | uuid                     | null                     | YES         | null                                          | 4                |
-| belief_tags       | inserted_at         | timestamp with time zone | null                     | YES         | now()                                         | 5                |
-| budgets           | id                  | bigint                   | null                     | NO          | nextval('budgets_id_seq'::regclass)           | 1                |
-| budgets           | user_id             | uuid                     | null                     | YES         | null                                          | 2                |
-| budgets           | category            | text                     | null                     | NO          | null                                          | 3                |
-| budgets           | amount              | numeric                  | null                     | NO          | null                                          | 4                |
-| budgets           | month               | integer                  | null                     | NO          | null                                          | 5                |
-| budgets           | year                | integer                  | null                     | NO          | null                                          | 6                |
-| budgets           | created_at          | timestamp with time zone | null                     | YES         | now()                                         | 7                |
-| budgets           | updated_at          | timestamp with time zone | null                     | YES         | now()                                         | 8                |
-| category          | id                  | uuid                     | null                     | NO          | gen_random_uuid()                             | 1                |
-| category          | name                | text                     | null                     | NO          | null                                          | 2                |
-| category          | description         | text                     | null                     | YES         | null                                          | 3                |
-| category          | is_split_enabled    | boolean                  | null                     | YES         | false                                         | 4                |
-| category          | inserted_at         | timestamp with time zone | null                     | YES         | now()                                         | 5                |
-| chart_of_accounts | id                  | uuid                     | null                     | NO          | gen_random_uuid()                             | 1                |
-| chart_of_accounts | user_id             | uuid                     | null                     | NO          | null                                          | 2                |
-| chart_of_accounts | code                | text                     | null                     | NO          | null                                          | 3                |
-| chart_of_accounts | name                | text                     | null                     | NO          | null                                          | 4                |
-| chart_of_accounts | type                | text                     | null                     | NO          | null                                          | 5                |
-| chart_of_accounts | description         | text                     | null                     | YES         | null                                          | 6                |
-| chart_of_accounts | created_at          | timestamp with time zone | null                     | YES         | now()                                         | 7                |
-| chart_of_accounts | updated_at          | timestamp with time zone | null                     | YES         | now()                                         | 8                |
-| description_rules | id                  | bigint                   | null                     | NO          | nextval('description_rules_id_seq'::regclass) | 1                |
-| description_rules | user_id             | uuid                     | null                     | YES         | null                                          | 2                |
-| description_rules | description_pattern | text                     | null                     | NO          | null                                          | 3                |
-| description_rules | chart_of_account    | text                     | null                     | NO          | null                                          | 4                |
-| description_rules | created_at          | timestamp with time zone | null                     | YES         | now()                                         | 5                |
-| description_rules | updated_at          | timestamp with time zone | null                     | YES         | now()                                         | 6                |
-| goals             | id                  | bigint                   | null                     | NO          | nextval('goals_id_seq'::regclass)             | 1                |
-| goals             | user_id             | uuid                     | null                     | YES         | null                                          | 2                |
-| goals             | name                | text                     | null                     | NO          | null                                          | 3                |
-| goals             | target_amount       | numeric                  | null                     | NO          | null                                          | 4                |
-| goals             | current_amount      | numeric                  | null                     | YES         | 0                                             | 5                |
-| goals             | deadline            | date                     | null                     | YES         | null                                          | 6                |
-| goals             | created_at          | timestamp with time zone | null                     | YES         | now()                                         | 7                |
-| goals             | updated_at          | timestamp with time zone | null                     | YES         | now()                                         | 8                |
-| merchant          | id                  | uuid                     | null                     | NO          | gen_random_uuid()                             | 1                |
-| merchant          | normalized_name     | text                     | null                     | NO          | null                                          | 2                |
-| merchant          | category_id         | uuid                     | null                     | YES         | null                                          | 3                |
-| merchant          | default_split_json  | jsonb                    | null                     | YES         | null                                          | 4                |
-| merchant          | aliases             | ARRAY                    | null                     | YES         | null                                          | 5                |
-| merchant          | inserted_at         | timestamp with time zone | null                     | YES         | now()                                         | 6                |
-| product_metadata  | id                  | bigint                   | null                     | NO          | nextval('product_metadata_id_seq'::regclass)  | 1                |
-| product_metadata  | user_id             | uuid                     | null                     | YES         | null                                          | 2                |
-| product_metadata  | product_id          | bigint                   | null                     | YES         | null                                          | 3                |
-| product_metadata  | key                 | text                     | null                     | NO          | null                                          | 4                |
-| product_metadata  | value               | text                     | null                     | YES         | null                                          | 5                |
-| product_metadata  | created_at          | timestamp with time zone | null                     | YES         | now()                                         | 6                |
-| product_metadata  | updated_at          | timestamp with time zone | null                     | YES         | now()                                         | 7                |
-| products          | id                  | bigint                   | null                     | NO          | nextval('products_id_seq'::regclass)          | 1                |
-| products          | user_id             | uuid                     | null                     | YES         | null                                          | 2                |
-| products          | account_id          | bigint                   | null                     | YES         | null                                          | 3                |
-| products          | product_type        | text                     | null                     | NO          | null                                          | 4                |
-| products          | product_name        | text                     | null                     | NO          | null                                          | 5                |
-| products          | product_code        | text                     | null                     | YES         | null                                          | 6                |
-| products          | quantity            | numeric                  | null                     | YES         | 0                                             | 7                |
-| products          | purchase_price      | numeric                  | null                     | YES         | 0                                             | 8                |
-| products          | current_price       | numeric                  | null                     | YES         | 0                                             | 9                |
-| products          | purchase_date       | date                     | null                     | YES         | null                                          | 10               |
-| products          | maturity_date       | date                     | null                     | YES         | null                                          | 11               |
-| products          | created_at          | timestamp with time zone | null                     | YES         | now()                                         | 12               |
-| products          | updated_at          | timestamp with time zone | null                     | YES         | now()                                         | 13               |
-| profiles          | id                  | uuid                     | null                     | NO          | null                                          | 1                |
-| profiles          | email               | text                     | null                     | YES         | null                                          | 2                |
-| profiles          | full_name           | text                     | null                     | YES         | null                                          | 3                |
-| profiles          | role                | text                     | null                     | YES         | 'user'::text                                  | 4                |
-| profiles          | created_at          | timestamp with time zone | null                     | YES         | timezone('utc'::text, now())                  | 5                |
-| providers         | id                  | bigint                   | null                     | NO          | nextval('providers_id_seq'::regclass)         | 1                |
-| providers         | user_id             | uuid                     | null                     | YES         | null                                          | 2                |
-| providers         | name                | text                     | null                     | NO          | null                                          | 3                |
-| providers         | country             | text                     | null                     | NO          | null                                          | 4                |
-| providers         | type                | text                     | null                     | NO          | null                                          | 5                |
-| providers         | created_at          | timestamp with time zone | null                     | YES         | now()                                         | 6                |
-| providers         | updated_at          | timestamp with time zone | null                     | YES         | now()                                         | 7                |
-| transaction_split | id                  | uuid                     | null                     | NO          | gen_random_uuid()                             | 1                |
-| transaction_split | transaction_id      | uuid                     | null                     | YES         | null                                          | 2                |
-| transaction_split | category_id         | uuid                     | null                     | YES         | null                                          | 3                |
-| transaction_split | amount              | numeric                  | null                     | NO          | null                                          | 4                |
-| transaction_split | percentage          | numeric                  | null                     | YES         | null                                          | 5                |
-| transaction_split | belief_tag          | text                     | null                     | YES         | null                                          | 6                |
-| transaction_split | inserted_at         | timestamp with time zone | null                     | YES         | now()                                         | 7                |
-| transactions      | id                  | uuid                     | null                     | NO          | gen_random_uuid()                             | 1                |
-| transactions      | user_id             | uuid                     | null                     | YES         | null                                          | 2                |
+| ddl                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.accounts */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.accounts (
+  id bigint NOT NULL DEFAULT nextval('personal_finance.accounts_id_seq'::regclass),
+  user_id uuid,
+  country text NOT NULL,
+  account_category text NOT NULL,
+  provider_id bigint,
+  account_number text,
+  name text NOT NULL,
+  currency text DEFAULT 'USD'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  balance real DEFAULT '0'::real,
+  institution text,
+  type text
+);                                                                                                                                                                                                                                                |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.accounts_id_seq */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.accounts_id_seq (
+  last_value bigint NOT NULL,
+  log_cnt bigint NOT NULL,
+  is_called boolean NOT NULL
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.accounts_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.accounts_pkey (
+  id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.belief_tags */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.belief_tags (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  description text,
+  category_id uuid,
+  inserted_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.belief_tags_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.belief_tags_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.budgets */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.budgets (
+  id bigint NOT NULL DEFAULT nextval('personal_finance.budgets_id_seq'::regclass),
+  user_id uuid,
+  category text NOT NULL,
+  amount numeric NOT NULL,
+  month integer NOT NULL,
+  year integer NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                 |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.budgets_id_seq */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.budgets_id_seq (
+  last_value bigint NOT NULL,
+  log_cnt bigint NOT NULL,
+  is_called boolean NOT NULL
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.budgets_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.budgets_pkey (
+  id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.budgets_user_id_category_month_year_key */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.budgets_user_id_category_month_year_key (
+  user_id uuid,
+  category text,
+  month integer,
+  year integer
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.category */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.category (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  description text,
+  is_split_enabled boolean DEFAULT false,
+  inserted_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.category_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.category_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.chart_of_accounts */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.chart_of_accounts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  code text NOT NULL,
+  name text NOT NULL,
+  account_type text NOT NULL,
+  description text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  is_active boolean
+);                                                                                                                                                                                                                                                                                                                                                                              |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.chart_of_accounts_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.chart_of_accounts_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.column_mappings */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.column_mappings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  account_id bigint,
+  file_type text NOT NULL,
+  name text NOT NULL,
+  mapping_config jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                                       |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.column_mappings_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.column_mappings_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.description_rules */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.description_rules (
+  id bigint NOT NULL DEFAULT nextval('personal_finance.description_rules_id_seq'::regclass),
+  user_id uuid,
+  description_pattern text NOT NULL,
+  chart_of_account text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                    |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.description_rules_id_seq */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.description_rules_id_seq (
+  last_value bigint NOT NULL,
+  log_cnt bigint NOT NULL,
+  is_called boolean NOT NULL
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.description_rules_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.description_rules_pkey (
+  id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.goals */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.goals (
+  id bigint NOT NULL DEFAULT nextval('personal_finance.goals_id_seq'::regclass),
+  user_id uuid,
+  name text NOT NULL,
+  target_amount numeric NOT NULL,
+  current_amount numeric DEFAULT 0,
+  deadline date,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                  |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.goals_id_seq */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.goals_id_seq (
+  last_value bigint NOT NULL,
+  log_cnt bigint NOT NULL,
+  is_called boolean NOT NULL
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.goals_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.goals_pkey (
+  id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_accounts_provider_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_accounts_provider_id (
+  provider_id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_accounts_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_accounts_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_budgets_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_budgets_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_column_mappings_account_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_column_mappings_account_id (
+  account_id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_column_mappings_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_column_mappings_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_description_rules_pattern */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_description_rules_pattern (
+  description_pattern text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_description_rules_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_description_rules_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_goals_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_goals_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_import_raw_data_created_at */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_import_raw_data_created_at (
+  created_at timestamp with time zone
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_import_raw_data_staging_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_import_raw_data_staging_id (
+  staging_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_import_staging_account_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_import_staging_account_id (
+  account_id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_import_staging_status */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_import_staging_status (
+  status text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_import_staging_uploaded_at */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_import_staging_uploaded_at (
+  uploaded_at timestamp with time zone
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_import_staging_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_import_staging_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_merchant_aliases_gin */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_merchant_aliases_gin (
+  aliases text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_merchant_normalized_name */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_merchant_normalized_name (
+  normalized_name text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_merchant_normalized_name_lower */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_merchant_normalized_name_lower (
+  lower text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_merchant_split_rules_name */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_merchant_split_rules_name (
+  merchant_friendly_name text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_merchant_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_merchant_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_product_metadata_product_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_product_metadata_product_id (
+  product_id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_products_account_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_products_account_id (
+  account_id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_products_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_products_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_providers_country */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_providers_country (
+  country text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_providers_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_providers_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_subscription_history_action_date */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_subscription_history_action_date (
+  action_date timestamp with time zone
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_subscription_history_subscription_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_subscription_history_subscription_id (
+  subscription_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_subscription_history_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_subscription_history_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_subscriptions_active */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_subscriptions_active (
+  user_id uuid,
+  is_active boolean
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_subscriptions_merchant_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_subscriptions_merchant_id (
+  user_id uuid,
+  merchant_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_subscriptions_next_billing */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_subscriptions_next_billing (
+  user_id uuid,
+  next_billing_date date
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_subscriptions_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_subscriptions_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_transaction_split_transaction_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_transaction_split_transaction_id (
+  transaction_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_transactions_account_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_transactions_account_id (
+  account_id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_transactions_category_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_transactions_category_id (
+  account_id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_transactions_chart_of_account_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_transactions_chart_of_account_id (
+  chart_of_account_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_transactions_date */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_transactions_date (
+  date date
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_transactions_normalized_merchant_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_transactions_normalized_merchant_id (
+  normalized_merchant_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_transactions_status */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_transactions_status (
+  status text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_transactions_status_account */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_transactions_status_account (
+  account_id bigint,
+  status text,
+  date date
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_transactions_user_id_date */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_transactions_user_id_date (
+  user_id uuid,
+  date date
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.import_raw_data */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.import_raw_data (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  staging_id uuid NOT NULL,
+  raw_data jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.import_raw_data_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.import_raw_data_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.import_staging */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.import_staging (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  account_id bigint,
+  file_name text NOT NULL,
+  file_type text NOT NULL,
+  column_names text[],
+  row_count integer NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'pending_mapping'::text,
+  mapping_id uuid,
+  error_message text,
+  uploaded_at timestamp with time zone DEFAULT now(),
+  imported_at timestamp with time zone
+);                                                                                                                                                                                                                                                                                 |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.import_staging_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.import_staging_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.merchant */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.merchant (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  normalized_name text NOT NULL,
+  category_id uuid,
+  aliases text[],
+  inserted_at timestamp with time zone DEFAULT now(),
+  user_id uuid,
+  is_big_box_store boolean DEFAULT false,
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                                          |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.merchant_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.merchant_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.merchant_split_rules */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.merchant_split_rules (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_friendly_name text NOT NULL,
+  splits jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.merchant_split_rules_merchant_friendly_name_key */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.merchant_split_rules_merchant_friendly_name_key (
+  merchant_friendly_name text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.merchant_split_rules_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.merchant_split_rules_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.product_metadata */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.product_metadata (
+  id bigint NOT NULL DEFAULT nextval('personal_finance.product_metadata_id_seq'::regclass),
+  user_id uuid,
+  product_id bigint,
+  key text NOT NULL,
+  value text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                                      |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.product_metadata_id_seq */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.product_metadata_id_seq (
+  last_value bigint NOT NULL,
+  log_cnt bigint NOT NULL,
+  is_called boolean NOT NULL
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.product_metadata_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.product_metadata_pkey (
+  id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.product_metadata_product_id_key_key */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.product_metadata_product_id_key_key (
+  product_id bigint,
+  key text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.products */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.products (
+  id bigint NOT NULL DEFAULT nextval('personal_finance.products_id_seq'::regclass),
+  user_id uuid,
+  account_id bigint,
+  product_type text NOT NULL,
+  product_name text NOT NULL,
+  product_code text,
+  quantity numeric DEFAULT 0,
+  purchase_price numeric DEFAULT 0,
+  current_price numeric DEFAULT 0,
+  purchase_date date,
+  maturity_date date,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                               |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.products_id_seq */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.products_id_seq (
+  last_value bigint NOT NULL,
+  log_cnt bigint NOT NULL,
+  is_called boolean NOT NULL
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.products_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.products_pkey (
+  id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.profiles */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.profiles (
+  id uuid NOT NULL,
+  email text,
+  full_name text,
+  role text DEFAULT 'user'::text,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now())
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.profiles_email_key */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.profiles_email_key (
+  email text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.profiles_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.profiles_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.providers */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.providers (
+  id bigint NOT NULL DEFAULT nextval('personal_finance.providers_id_seq'::regclass),
+  user_id uuid,
+  name text NOT NULL,
+  country text NOT NULL,
+  type text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                                              |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.providers_id_seq */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.providers_id_seq (
+  last_value bigint NOT NULL,
+  log_cnt bigint NOT NULL,
+  is_called boolean NOT NULL
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.providers_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.providers_pkey (
+  id bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.subscription_history */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.subscription_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  subscription_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  action text NOT NULL,
+  action_date timestamp with time zone NOT NULL DEFAULT now(),
+  reason text,
+  notes text,
+  old_value text,
+  new_value text
+);                                                                                                                                                                                                                                                                                                                                                                                                            |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.subscription_history_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.subscription_history_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.subscriptions */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.subscriptions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  friendly_name text NOT NULL,
+  amount numeric(12,2) NOT NULL,
+  currency text NOT NULL DEFAULT 'USD'::text,
+  frequency text NOT NULL,
+  next_billing_date date,
+  last_billing_date date,
+  billing_day_of_month integer,
+  is_active boolean NOT NULL DEFAULT true,
+  activated_at timestamp with time zone DEFAULT now(),
+  deactivated_at timestamp with time zone,
+  description text,
+  reminder_days_before integer DEFAULT 3,
+  auto_renew boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+); |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.subscriptions_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.subscriptions_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.transaction_split */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.transaction_split (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  transaction_id uuid,
+  category_id uuid,
+  amount numeric(12,2) NOT NULL,
+  percentage numeric(5,2),
+  belief_tag text,
+  chart_of_account_id uuid,
+  inserted_at timestamp with time zone DEFAULT now(),
+  description text,
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                    |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.transaction_split_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.transaction_split_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.transactions */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.transactions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  date date NOT NULL,
+  raw_merchant_name text NOT NULL,
+  normalized_merchant_id uuid,
+  amount numeric(12,2) NOT NULL,
+  currency text NOT NULL,
+  is_split boolean DEFAULT false,
+  notes text,
+  inserted_at timestamp with time zone DEFAULT now(),
+  category_id uuid,
+  description text,
+  memo text,
+  type text,
+  account_id bigint,
+  chart_of_account_id uuid,
+  split_chart_of_account_id uuid,
+  product_id uuid,
+  status text DEFAULT 'pending_merchant_mapping'::text,
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.transactions_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.transactions_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.user_preferences */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.user_preferences (
+  user_id uuid NOT NULL,
+  merchant_id uuid NOT NULL,
+  preferred_split_json jsonb,
+  auto_tag_enabled boolean DEFAULT true
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.user_preferences_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.user_preferences_pkey (
+  user_id uuid,
+  merchant_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |

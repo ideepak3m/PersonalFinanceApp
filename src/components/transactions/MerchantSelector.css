@@ -1,0 +1,256 @@
+/* MerchantSelector.css */
+
+.merchant-selector-linked {
+    display: inline-block;
+}
+
+.merchant-name-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background-color: #e0f2fe;
+    border: 1px solid #0ea5e9;
+    border-radius: 0.375rem;
+}
+
+.merchant-name-text {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #0c4a6e;
+}
+
+.merchant-edit-btn {
+    padding: 0.125rem;
+    color: #0ea5e9;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    transition: all 0.15s;
+}
+
+.merchant-edit-btn:hover {
+    background-color: #bae6fd;
+}
+
+.merchant-selector-empty {
+    display: inline-block;
+}
+
+.merchant-search-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    color: #6b7280;
+    background-color: #f9fafb;
+    border: 1px dashed #d1d5db;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.merchant-search-btn:hover {
+    background-color: #f3f4f6;
+    border-color: #9ca3af;
+    color: #374151;
+}
+
+.merchant-selector-dropdown {
+    position: relative;
+    min-width: 300px;
+    background-color: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    z-index: 50;
+}
+
+.merchant-search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.merchant-search-input {
+    flex: 1;
+    font-size: 0.875rem;
+    border: none;
+    outline: none;
+}
+
+.merchant-search-input::placeholder {
+    color: #9ca3af;
+}
+
+.merchant-close-btn {
+    padding: 0.25rem;
+    color: #6b7280;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    transition: all 0.15s;
+}
+
+.merchant-close-btn:hover {
+    background-color: #f3f4f6;
+    color: #374151;
+}
+
+.merchant-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.merchant-list-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    text-align: left;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.merchant-list-item:hover {
+    background-color: #f9fafb;
+}
+
+.merchant-list-item:last-child {
+    border-bottom: none;
+}
+
+.merchant-list-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #111827;
+}
+
+.merchant-list-aliases {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.125rem;
+}
+
+.merchant-list-empty {
+    padding: 2rem 1rem;
+    text-align: center;
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.merchant-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.merchant-create-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #059669;
+    background-color: #d1fae5;
+    border: 1px solid #10b981;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.merchant-create-btn:hover {
+    background-color: #a7f3d0;
+}
+
+.merchant-unlink-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #dc2626;
+    background-color: #fee2e2;
+    border: 1px solid #ef4444;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.merchant-unlink-btn:hover {
+    background-color: #fecaca;
+}
+
+.merchant-create-form {
+    padding: 0.75rem;
+}
+
+.merchant-create-input {
+    width: 100%;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    outline: none;
+    margin-bottom: 0.75rem;
+}
+
+.merchant-create-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.merchant-create-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.merchant-create-save {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: white;
+    background-color: #3b82f6;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.merchant-create-save:hover:not(:disabled) {
+    background-color: #2563eb;
+}
+
+.merchant-create-save:disabled {
+    background-color: #9ca3af;
+    cursor: not-allowed;
+}
+
+.merchant-create-cancel {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280;
+    background-color: #f3f4f6;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.merchant-create-cancel:hover {
+    background-color: #e5e7eb;
+    color: #374151;
+}

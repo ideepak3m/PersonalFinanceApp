@@ -12,7 +12,8 @@ import {
     supabaseChartOfAccountsDB,
     supabaseMerchantDB,
     supabaseCategoryDB,
-    supabaseTransactionSplitDB
+    supabaseTransactionSplitDB,
+    supabaseMerchantSplitRulesDB
 } from '../../services/supabaseDatabase';
 import { transactionLogic } from '../../services/transactionBusinessLogic';
 
@@ -25,12 +26,15 @@ export const UncategorizedReceipts = () => {
     const [chartOfAccounts, setChartOfAccounts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [merchants, setMerchants] = useState([]);
+    const [merchantSplitRules, setMerchantSplitRules] = useState([]);
     const [suspenseAccount, setSuspenseAccount] = useState(null);
 
     const [selectedAll, setSelectedAll] = useState(false);
     const [selectedTxns, setSelectedTxns] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(false);
+    const [merchantSearch, setMerchantSearch] = useState({});
+    const [showMerchantDropdown, setShowMerchantDropdown] = useState({});
 
     // Modals
     const [editModalTxn, setEditModalTxn] = useState(null);
@@ -44,11 +48,12 @@ export const UncategorizedReceipts = () => {
         try {
             setLoading(true);
 
-            const [acc, coa, cats, merchs] = await Promise.all([
+            const [acc, coa, cats, merchs, splitRules] = await Promise.all([
                 supabaseAccountsDB.getById(accountId),
                 supabaseChartOfAccountsDB.getAll(),
                 supabaseCategoryDB.getAll(),
-                supabaseMerchantDB.getAll()
+                supabaseMerchantDB.getAll(),
+                supabaseMerchantSplitRulesDB.getAll()
             ]);
 
             setAccount(acc);
@@ -60,7 +65,15 @@ export const UncategorizedReceipts = () => {
             setChartOfAccounts(sortedCoa);
 
             setCategories(cats || []);
-            setMerchants(merchs || []);
+
+            // Remove duplicates and sort merchants alphabetically
+            const uniqueMerchants = Array.from(
+                new Map((merchs || []).map(m => [m.id, m])).values()
+            ).sort((a, b) =>
+                (a.normalized_name || '').localeCompare(b.normalized_name || '')
+            );
+            setMerchants(uniqueMerchants);
+            setMerchantSplitRules(splitRules || []);
 
             // Find suspense account
             const suspense = sortedCoa.find(c =>
@@ -69,7 +82,7 @@ export const UncategorizedReceipts = () => {
             setSuspenseAccount(suspense);
 
             // Load uncategorized transactions with enrichment
-            await loadTransactions(merchs || [], cats || [], sortedCoa);
+            await loadTransactions(merchs || [], cats || [], sortedCoa, splitRules || []);
 
         } catch (error) {
             console.error('Error loading data:', error);
@@ -79,26 +92,65 @@ export const UncategorizedReceipts = () => {
         }
     };
 
-    const loadTransactions = async (merchantsData = null, categoriesData = null, coaData = null) => {
+    const loadTransactions = async (merchantsData = null, categoriesData = null, coaData = null, splitRulesData = null) => {
         try {
             const { data, error } = await supabaseTransactionsDB.table()
-                .select('*')
+                .select(`
+                    *,
+                    merchant:normalized_merchant_id (
+                        id,
+                        normalized_name,
+                        aliases
+                    )
+                `)
                 .eq('account_id', accountId)
                 .eq('status', 'uncategorized')
                 .order('date', { ascending: false });
 
             if (error) throw error;
 
+            //console.log('Loaded transactions:', data?.length, 'First txn:', data?.[0]);
+
             // Use passed data or fall back to state
             const merchantsList = merchantsData || merchants;
             const categoriesList = categoriesData || categories;
             const coaList = coaData || chartOfAccounts;
+            const splitRulesList = splitRulesData || merchantSplitRules;
 
-            // Enrich with suggestions
+            // Enrich with suggestions AND suggested merchant
             const enriched = (data || []).map(txn => {
                 const suggestion = getSuggestion(txn, merchantsList, categoriesList, coaList);
-                return { ...txn, suggestion };
+
+                // Find suggested merchant based on description
+                const suggestedMerchant = findMatchingMerchant(txn.description, merchantsList);
+
+                // Check if merchant has default split rule
+                let defaultSplitRule = null;
+                const merchantNameToCheck = txn.merchant?.normalized_name || suggestedMerchant?.normalized_name;
+
+                if (merchantNameToCheck) {
+                    defaultSplitRule = splitRulesList.find(rule =>
+                        rule.merchant_friendly_name === merchantNameToCheck
+                    );
+                    console.log('Checking split rule for:', merchantNameToCheck, 'Found:', defaultSplitRule ? 'YES' : 'NO');
+                    if (defaultSplitRule) {
+                        console.log('Split rule details:', defaultSplitRule);
+                    }
+                } else {
+                    console.log('Transaction has no merchant linked or suggested:', txn.description);
+                }
+
+                return {
+                    ...txn,
+                    suggestion,
+                    suggestedMerchantId: suggestedMerchant?.id || null,
+                    suggestedMerchantName: suggestedMerchant?.normalized_name || null,
+                    defaultSplitRule: defaultSplitRule || null
+                };
             });
+
+            console.log('Split rules available:', splitRulesList?.length || 0);
+            console.log('Enriched transactions:', enriched.filter(t => t.defaultSplitRule).length, 'with split rules');
 
             setTransactions(enriched);
         } catch (error) {
@@ -106,12 +158,36 @@ export const UncategorizedReceipts = () => {
         }
     };
 
+    // Helper function to find matching merchant
+    const findMatchingMerchant = (description, merchantsList) => {
+        if (!description || !merchantsList || merchantsList.length === 0) return null;
+
+        const descLower = description.toLowerCase();
+
+        // Try to find merchant by checking if description contains merchant name or aliases
+        const merchant = merchantsList.find(m => {
+            // Check normalized_name
+            if (m.normalized_name && descLower.includes(m.normalized_name.toLowerCase())) {
+                return true;
+            }
+            // Check aliases
+            if (Array.isArray(m.aliases)) {
+                return m.aliases.some(alias =>
+                    alias && descLower.includes(alias.toLowerCase())
+                );
+            }
+            return false;
+        });
+
+        return merchant || null;
+    };
+
     const getSuggestion = (txn, merchantsList, categoriesList, coaList) => {
         if (!txn.description || !merchantsList || merchantsList.length === 0) return null;
 
         const descLower = txn.description.toLowerCase();
 
-        console.log('Checking suggestion for:', txn.description, 'against', merchantsList.length, 'merchants');
+        //console.log('Checking suggestion for:', txn.description, 'against', merchantsList.length, 'merchants');
 
         // Try to find merchant - check if description contains merchant name or aliases
         const merchant = merchantsList.find(m => {
@@ -129,16 +205,16 @@ export const UncategorizedReceipts = () => {
         });
 
         if (!merchant) {
-            console.log('No merchant match found for:', txn.description);
+            //console.log('No merchant match found for:', txn.description);
             return null;
         }
 
-        console.log('Merchant found:', merchant.normalized_name);
+        //console.log('Merchant found:', merchant.normalized_name);
 
         const category = categoriesList.find(c => c.id === merchant.category_id);
 
         if (category?.is_split_enabled) {
-            console.log('Split enabled for category:', category.name);
+            //console.log('Split enabled for category:', category.name);
             return {
                 type: 'split',
                 message: 'Pending Split',
@@ -214,7 +290,32 @@ export const UncategorizedReceipts = () => {
         if (selectedAll) {
             setSelectedTxns(new Set());
         } else {
-            setSelectedTxns(new Set(transactions.map(t => t.id)));
+            // Only select transactions that are valid for bulk update (not Suspense)
+            const validTransactions = transactions.filter(t => {
+                // Include split transactions
+                if (t.splitReady) return true;
+
+                // Include transactions with COA suggestions that are NOT Suspense
+                if (t.suggestion?.type === 'coa') {
+                    const coaId = t.suggestion.chartOfAccountId;
+                    const coa = chartOfAccounts.find(c => c.id === coaId);
+                    // Exclude if COA is Suspense
+                    if (coa?.name?.toLowerCase() === 'suspense') return false;
+                    return true;
+                }
+
+                // Include transactions that already have a chart_of_account_id set (and not Suspense)
+                if (t.chart_of_account_id) {
+                    const coa = chartOfAccounts.find(c => c.id === t.chart_of_account_id);
+                    // Exclude if COA is Suspense
+                    if (coa?.name?.toLowerCase() === 'suspense') return false;
+                    return true;
+                }
+
+                return false;
+            });
+
+            setSelectedTxns(new Set(validTransactions.map(t => t.id)));
         }
         setSelectedAll(!selectedAll);
     };
@@ -222,52 +323,113 @@ export const UncategorizedReceipts = () => {
     const handleBulkUpdate = async () => {
         try {
             const selectedTransactions = transactions.filter(t => selectedTxns.has(t.id));
-            const updates = selectedTransactions
-                .filter(t => t.suggestion?.type === 'coa' || t.splitReady)
-                .map(t => ({
-                    id: t.id,
-                    chart_of_account_id: t.splitReady ? null : t.suggestion.chartOfAccountId,
-                    status: t.splitReady ? 'split' : 'categorized',
-                    is_split: t.splitReady || false,
-                    splits: t.splits || null
-                }));
 
-            if (updates.length === 0) {
-                alert('No transactions ready to update');
+            // Filter transactions that have a valid COA (not Suspense) or are split ready
+            const validTransactions = selectedTransactions.filter(t => {
+                // Include split transactions
+                if (t.splitReady) return true;
+
+                // Include transactions with COA suggestions that are NOT Suspense
+                if (t.suggestion?.type === 'coa') {
+                    const coaId = t.suggestion.chartOfAccountId;
+                    const coa = chartOfAccounts.find(c => c.id === coaId);
+                    // Exclude if COA is Suspense
+                    if (coa?.name?.toLowerCase() === 'suspense') return false;
+                    return true;
+                }
+
+                // Include transactions that already have a chart_of_account_id set (and not Suspense)
+                if (t.chart_of_account_id) {
+                    const coa = chartOfAccounts.find(c => c.id === t.chart_of_account_id);
+                    // Exclude if COA is Suspense
+                    if (coa?.name?.toLowerCase() === 'suspense') return false;
+                    return true;
+                }
+
+                return false;
+            });
+
+            if (validTransactions.length === 0) {
+                alert('No valid transactions ready to update. Please ensure transactions have a Chart of Account selected (not Suspense) or are split ready.');
                 return;
             }
 
+            // Show confirmation with count
+            const confirm = window.confirm(`Ready to categorize ${validTransactions.length} transaction(s). Continue?`);
+            if (!confirm) return;
+
+            const successCount = { updated: 0, failed: 0 };
+
             // Process each transaction
-            for (const update of updates) {
-                // Update transaction
-                await supabaseTransactionsDB.update(update.id, {
-                    chart_of_account_id: update.chart_of_account_id,
-                    status: update.status,
-                    is_split: update.is_split
-                });
+            for (const txn of validTransactions) {
+                try {
+                    const updates = {
+                        chart_of_account_id: txn.splitReady ? null : (txn.suggestion?.chartOfAccountId || txn.chart_of_account_id),
+                        status: txn.splitReady ? 'split' : 'categorized',
+                        is_split: txn.splitReady || false,
+                        normalized_merchant_id: txn.suggestedMerchantId || txn.normalized_merchant_id
+                    };
 
-                // If it's a split transaction, save the split records
-                if (update.is_split && update.splits && update.splits.length > 0) {
-                    // Delete existing splits first (in case of re-edit)
-                    await supabaseTransactionSplitDB.deleteByTransactionId(update.id);
+                    // Update transaction status and COA
+                    await supabaseTransactionsDB.update(txn.id, updates);
 
-                    // Prepare split records for database
-                    const splitRecords = update.splits.map(s => ({
-                        transaction_id: update.id,
-                        chart_of_account_id: s.chartOfAccountId,
-                        percentage: parseFloat(s.percent) || 0,
-                        amount: parseFloat(s.amount) || 0,
-                        description: s.description || null
-                    }));
+                    // If it's a split transaction, save the split records
+                    if (txn.splitReady && txn.splits && txn.splits.length > 0) {
+                        // Delete existing splits first (in case of re-edit)
+                        await supabaseTransactionSplitDB.deleteByTransactionId(txn.id);
 
-                    // Save all splits
-                    for (const splitRecord of splitRecords) {
-                        await supabaseTransactionSplitDB.add(splitRecord);
+                        // Prepare split records for database
+                        const splitRecords = txn.splits.map(s => ({
+                            transaction_id: txn.id,
+                            chart_of_account_id: s.chartOfAccountId,
+                            percentage: parseFloat(s.percent) || 0,
+                            amount: parseFloat(s.amount) || 0,
+                            description: s.description || null
+                        }));
+
+                        // Save all splits
+                        for (const splitRecord of splitRecords) {
+                            await supabaseTransactionSplitDB.add(splitRecord);
+                        }
+
+                        // Check if this merchant split rule already exists
+                        if (txn.suggestedMerchantName) {
+                            const existingRule = await supabaseMerchantSplitRulesDB.getByMerchantName(txn.suggestedMerchantName);
+
+                            if (!existingRule) {
+                                // Create new merchant split rule
+                                const ruleRecord = {
+                                    merchant_friendly_name: txn.suggestedMerchantName,
+                                    splits: txn.splits.map(s => ({
+                                        chartOfAccountId: s.chartOfAccountId,
+                                        percent: parseFloat(s.percent) || 0,
+                                        description: s.description || null
+                                    }))
+                                };
+
+                                await supabaseMerchantSplitRulesDB.add(ruleRecord);
+                                console.log('Created new split rule for merchant:', txn.suggestedMerchantName);
+                            } else {
+                                console.log('Split rule already exists for merchant:', txn.suggestedMerchantName);
+                            }
+                        }
                     }
+
+                    successCount.updated++;
+
+                } catch (error) {
+                    console.error('Failed to process transaction:', txn.id, error);
+                    successCount.failed++;
                 }
             }
 
-            alert(`Updated ${updates.length} transactions`);
+            const message = successCount.failed > 0
+                ? `Categorized ${successCount.updated} transactions. ${successCount.failed} failed.`
+                : `Successfully categorized ${successCount.updated} transactions.`;
+
+            alert(message);
+
+            // Reload transactions
             await loadTransactions();
             setSelectedTxns(new Set());
             setSelectedAll(false);
@@ -303,15 +465,57 @@ export const UncategorizedReceipts = () => {
         await loadTransactions();
     };
 
-    const handleSplitSave = (splits) => {
+    const handleSplitSave = async (splits) => {
+        const transaction = splitModalTxn;
+
         // Store split data with transaction (not saved to DB yet)
         setTransactions(prev =>
             prev.map(t =>
-                t.id === splitModalTxn.id
+                t.id === transaction.id
                     ? { ...t, splitReady: true, splits }
                     : t
             )
         );
+
+        // Check if this merchant has a normalized_merchant_id and merchant name
+        const merchantId = transaction.normalized_merchant_id;
+        const merchantName = transaction.merchant?.normalized_name;
+
+        if (merchantId && merchantName) {
+            // Check if a split rule already exists for this merchant
+            const existingRule = await supabaseMerchantSplitRulesDB.getByMerchantName(merchantName);
+
+            if (!existingRule) {
+                // Ask user if they want to save as default
+                const saveAsDefault = confirm(
+                    `Would you like to save this split as the default for "${merchantName}"?\n\n` +
+                    `This will automatically suggest this split configuration for future transactions from this merchant.`
+                );
+
+                if (saveAsDefault) {
+                    try {
+                        // Convert splits to the format expected by merchant_split_rules table
+                        const splitRules = splits
+                            .filter(s => s.chartOfAccountId && s.percent > 0)
+                            .map(s => ({
+                                chart_of_account_id: s.chartOfAccountId,
+                                percentage: parseFloat(s.percent)
+                            }));
+
+                        await supabaseMerchantSplitRulesDB.add({
+                            merchant_friendly_name: merchantName,
+                            splits: splitRules
+                        });
+
+                        alert(`✓ Default split rule saved for "${merchantName}"`);
+                    } catch (error) {
+                        console.error('Error saving default split rule:', error);
+                        alert('Failed to save default split rule: ' + error.message);
+                    }
+                }
+            }
+        }
+
         setSplitModalTxn(null);
     };
 
@@ -395,7 +599,13 @@ export const UncategorizedReceipts = () => {
                                 Date
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                Description
+                                Description (Raw)
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Merchant (Friendly)
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Default Split
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 Account
@@ -439,6 +649,130 @@ export const UncategorizedReceipts = () => {
                                     {txn.description}
                                 </td>
                                 <td className="px-4 py-3 text-sm">
+                                    {/* Show suggested merchant if found */}
+                                    {/* {txn.suggestedMerchantName && !txn.normalized_merchant_id && (
+                                        <div className="text-xs text-green-600 mb-1 flex items-center gap-1">
+                                            💡 Suggested: <strong>{txn.suggestedMerchantName}</strong>
+                                        </div>
+                                    )} */}
+                                    {/* Debug info */}
+                                    {/* <div className="text-xs text-gray-500 mb-1">
+                                        Linked: {txn.normalized_merchant_id ? txn.merchant?.normalized_name || 'Yes' : 'No'} |
+                                        Suggested: {txn.suggestedMerchantName || 'None'}
+                                    </div> */}
+
+                                    {/* Searchable Merchant Input */}
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={merchantSearch[txn.id] ??
+                                                (txn.normalized_merchant_id
+                                                    ? merchants.find(m => m.id === txn.normalized_merchant_id)?.normalized_name
+                                                    : txn.suggestedMerchantName) ?? ''}
+                                            onChange={(e) => {
+                                                setMerchantSearch({ ...merchantSearch, [txn.id]: e.target.value });
+                                                setShowMerchantDropdown({ ...showMerchantDropdown, [txn.id]: true });
+                                            }}
+                                            onFocus={() => setShowMerchantDropdown({ ...showMerchantDropdown, [txn.id]: true })}
+                                            placeholder="Search or add merchant..."
+                                            className={`border rounded px-2 py-1 text-sm w-full ${txn.normalized_merchant_id
+                                                ? 'bg-green-50 border-green-300'
+                                                : txn.suggestedMerchantId
+                                                    ? 'bg-yellow-50 border-yellow-300'
+                                                    : 'bg-white'
+                                                }`}
+                                        />
+
+                                        {/* Dropdown */}
+                                        {showMerchantDropdown[txn.id] && (
+                                            <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                                {(() => {
+                                                    const searchValue = (merchantSearch[txn.id] || '').toLowerCase();
+                                                    const filtered = merchants.filter(m =>
+                                                        m.normalized_name?.toLowerCase().includes(searchValue)
+                                                    );
+
+                                                    return (
+                                                        <>
+                                                            {filtered.length > 0 ? (
+                                                                filtered.map(merchant => (
+                                                                    <button
+                                                                        key={merchant.id}
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                await supabaseTransactionsDB.update(txn.id, {
+                                                                                    normalized_merchant_id: merchant.id
+                                                                                });
+                                                                                setMerchantSearch({ ...merchantSearch, [txn.id]: merchant.normalized_name });
+                                                                                setShowMerchantDropdown({ ...showMerchantDropdown, [txn.id]: false });
+                                                                                await loadTransactions();
+                                                                            } catch (error) {
+                                                                                console.error('Error linking merchant:', error);
+                                                                                alert('Failed to link merchant');
+                                                                            }
+                                                                        }}
+                                                                        className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm border-b"
+                                                                    >
+                                                                        {merchant.normalized_name}
+                                                                        {merchant.id === txn.suggestedMerchantId && ' ⭐'}
+                                                                    </button>
+                                                                ))
+                                                            ) : (
+                                                                <div className="px-3 py-2 text-sm text-gray-500">
+                                                                    No merchants found
+                                                                </div>
+                                                            )}
+
+                                                            {/* Add new merchant option */}
+                                                            {merchantSearch[txn.id] && merchantSearch[txn.id].trim().length > 0 && (
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        try {
+                                                                            const newMerchant = await supabaseMerchantDB.add({
+                                                                                normalized_name: merchantSearch[txn.id].trim(),
+                                                                                aliases: [txn.description]
+                                                                            });
+                                                                            await supabaseTransactionsDB.update(txn.id, {
+                                                                                normalized_merchant_id: newMerchant.id
+                                                                            });
+                                                                            setShowMerchantDropdown({ ...showMerchantDropdown, [txn.id]: false });
+                                                                            await loadData();
+                                                                        } catch (error) {
+                                                                            console.error('Error creating merchant:', error);
+                                                                            alert('Failed to create merchant');
+                                                                        }
+                                                                    }}
+                                                                    className="w-full text-left px-3 py-2 bg-blue-50 hover:bg-blue-100 text-sm font-medium text-blue-700 border-t-2"
+                                                                >
+                                                                    ➕ Add "{merchantSearch[txn.id].trim()}"
+                                                                </button>
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
+                                    </div>
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                    {txn.defaultSplitRule ? (
+                                        <div className="text-xs">
+                                            {txn.defaultSplitRule.splits.map((split, idx) => {
+                                                const coa = chartOfAccounts.find(c => c.id === (split.chart_of_account_id || split.category_id));
+                                                return (
+                                                    <div key={idx} className="text-purple-600">
+                                                        {coa?.name || 'Unknown'}: {split.percentage}%
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (txn.suggestion?.type === 'split' || txn.defaultSplitRule) ? (
+                                        <div className="text-xs text-gray-400">
+                                            No default split
+                                        </div>
+                                    ) : null}
+                                </td>
+                                <td className="px-4 py-3 text-sm">
                                     <div className="space-y-1">
                                         <div className="line-through text-gray-400">
                                             {suspenseAccount?.name || 'Suspense'}
@@ -446,6 +780,10 @@ export const UncategorizedReceipts = () => {
                                         {txn.splitReady ? (
                                             <div className="text-green-600 font-medium">
                                                 ✓ Split Ready
+                                            </div>
+                                        ) : txn.defaultSplitRule ? (
+                                            <div className="text-purple-600 font-medium">
+                                                💡 Default Split Available
                                             </div>
                                         ) : txn.suggestion?.type === 'split' ? (
                                             <div className="text-orange-600">
@@ -462,17 +800,30 @@ export const UncategorizedReceipts = () => {
                                         )}
                                     </div>
                                 </td>
-                                <td className="px-4 py-3 text-sm text-right font-medium">
-                                    ${Math.abs(txn.amount).toFixed(2)}
+                                <td className={`px-4 py-3 text-sm text-right font-medium ${txn.amount > 0 ? 'text-green-600' : 'text-red-600'
+                                    }`}>
+                                    <div>
+                                        <div>{txn.amount > 0 ? '+' : '-'}${Math.abs(txn.amount).toFixed(2)}</div>
+                                        {txn.amount > 0 && (
+                                            <div className="text-xs text-green-600 font-normal">Refund</div>
+                                        )}
+                                    </div>
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                     <div className="flex flex-col gap-1">
-                                        {txn.suggestion?.type === 'split' && !txn.splitReady && (
+                                        {(txn.suggestion?.type === 'split' || txn.defaultSplitRule) && !txn.splitReady ? (
                                             <button
                                                 onClick={() => setSplitModalTxn(txn)}
                                                 className="px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700"
                                             >
                                                 Split
+                                            </button>
+                                        ) : !txn.splitReady && (
+                                            <button
+                                                onClick={() => setEditModalTxn(txn)}
+                                                className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                                            >
+                                                Select
                                             </button>
                                         )}
                                         {txn.splitReady && (
@@ -508,23 +859,34 @@ export const UncategorizedReceipts = () => {
                 <EditCoAModal
                     transaction={editModalTxn}
                     chartOfAccounts={chartOfAccounts}
-                    onSave={(coaId) => {
-                        // Update suggestion
-                        setTransactions(prev =>
-                            prev.map(t =>
-                                t.id === editModalTxn.id
-                                    ? {
-                                        ...t,
-                                        suggestion: {
-                                            type: 'coa',
-                                            chartOfAccountId: coaId,
-                                            chartOfAccountName: chartOfAccounts.find(c => c.id === coaId)?.name
+                    onSave={async (coaId) => {
+                        try {
+                            // Save to database
+                            await supabaseTransactionsDB.update(editModalTxn.id, {
+                                chart_of_account_id: coaId
+                            });
+
+                            // Update local state
+                            setTransactions(prev =>
+                                prev.map(t =>
+                                    t.id === editModalTxn.id
+                                        ? {
+                                            ...t,
+                                            chart_of_account_id: coaId,
+                                            suggestion: {
+                                                type: 'coa',
+                                                chartOfAccountId: coaId,
+                                                chartOfAccountName: chartOfAccounts.find(c => c.id === coaId)?.name
+                                            }
                                         }
-                                    }
-                                    : t
-                            )
-                        );
-                        setEditModalTxn(null);
+                                        : t
+                                )
+                            );
+                            setEditModalTxn(null);
+                        } catch (error) {
+                            console.error('Error saving COA:', error);
+                            alert('Failed to save Chart of Account');
+                        }
                     }}
                     onClose={() => setEditModalTxn(null)}
                 />
@@ -536,7 +898,7 @@ export const UncategorizedReceipts = () => {
                     transaction={splitModalTxn}
                     totalAmount={Math.abs(splitModalTxn.amount)}
                     chartOfAccounts={chartOfAccounts}
-                    existingSplits={splitModalTxn.splits}
+                    existingSplits={splitModalTxn.splits || (splitModalTxn.defaultSplitRule ? splitModalTxn.defaultSplitRule.splits : null)}
                     onSave={handleSplitSave}
                     onClose={() => setSplitModalTxn(null)}
                 />

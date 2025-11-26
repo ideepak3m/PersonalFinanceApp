@@ -753,6 +753,333 @@ class ChartOfAccountsService extends SupabaseService {
     }
 }
 
+// Import Staging Service
+class ImportStagingService extends SupabaseService {
+    constructor() {
+        super('import_staging');
+    }
+
+    // Get pending imports for an account
+    async getPendingByAccount(accountId) {
+        const { data, error } = await this.table()
+            .select('*')
+            .eq('account_id', accountId)
+            .in('status', ['pending_mapping', 'mapped'])
+            .order('uploaded_at', { ascending: false });
+
+        if (error) throw error;
+        return data;
+    }
+
+    // Get staging with raw data
+    async getWithRawData(stagingId) {
+        const { data: staging, error: stagingError } = await this.getById(stagingId);
+        if (stagingError) throw stagingError;
+
+        const { data: rawData, error: rawError } = await supabase
+            .from('import_raw_data')
+            .select('raw_data')
+            .eq('staging_id', stagingId)
+            .single();
+
+        if (rawError) throw rawError;
+
+        return {
+            ...staging,
+            raw_data: rawData.raw_data
+        };
+    }
+
+    // Update status
+    async updateStatus(id, status, errorMessage = null) {
+        const updates = { status };
+        if (status === 'imported') {
+            updates.imported_at = new Date().toISOString();
+        }
+        if (errorMessage) {
+            updates.error_message = errorMessage;
+        }
+
+        return await this.update(id, updates);
+    }
+
+    // Get uncategorized transactions for an account (from import_staging)
+    async getUncategorizedByAccount(accountId) {
+        const { data, error } = await this.table()
+            .select('*')
+            .eq('account_id', accountId)
+            .eq('status', 'imported')
+            .order('transaction_date', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    }
+
+    // Bulk add staging records
+    async bulkAdd(records) {
+        const snakeCaseRecords = records.map(r => this.toSnakeCase(r));
+
+        const { data, error } = await this.table()
+            .insert(snakeCaseRecords)
+            .select();
+
+        if (error) throw error;
+        return data;
+    }
+
+    // Delete by ID
+    async deleteById(id) {
+        const { error } = await this.table()
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        return true;
+    }
+
+    // Bulk delete by IDs
+    async bulkDelete(ids) {
+        const { error } = await this.table()
+            .delete()
+            .in('id', ids);
+
+        if (error) throw error;
+        return true;
+    }
+}
+
+// Import Raw Data Service
+class ImportRawDataService extends SupabaseService {
+    constructor() {
+        super('import_raw_data');
+    }
+
+    // Override add method - no user_id needed for raw data
+    async add(record) {
+        try {
+            const { data, error } = await this.table()
+                .insert([record])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error(`Error adding to ${this.tableName}:`, error);
+            throw error;
+        }
+    }
+
+    // Get raw data for staging
+    async getByStagingId(stagingId) {
+        const { data, error } = await this.table()
+            .select('raw_data')
+            .eq('staging_id', stagingId)
+            .single();
+
+        if (error) throw error;
+        return data.raw_data;
+    }
+
+    // Delete raw data for staging
+    async deleteByStagingId(stagingId) {
+        const { error } = await this.table()
+            .delete()
+            .eq('staging_id', stagingId);
+
+        if (error) throw error;
+        return true;
+    }
+}// Column Mappings Service
+class ColumnMappingsService extends SupabaseService {
+    constructor() {
+        super('column_mappings');
+    }
+
+    // Get mappings for an account and file type
+    async getByAccountAndType(accountId, fileType) {
+        const { data, error } = await this.table()
+            .select('*')
+            .eq('account_id', accountId)
+            .eq('file_type', fileType)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data;
+    }
+
+    // Get default/most recent mapping
+    async getDefaultMapping(accountId, fileType) {
+        const { data, error } = await this.table()
+            .select('*')
+            .eq('account_id', accountId)
+            .eq('file_type', fileType)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+        return data;
+    }
+}
+
+// Subscription History Service
+class SubscriptionHistoryService extends SupabaseService {
+    constructor() {
+        super('subscription_history');
+    }
+
+    // Get history for a merchant
+    async getByMerchantId(merchantId) {
+        const { data, error } = await this.table()
+            .select('*')
+            .eq('merchant_id', merchantId)
+            .order('action_date', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    }
+
+    // Get recent subscription changes for user
+    async getRecentChanges(limit = 10) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const { data, error } = await this.table()
+                .select(`
+                    *,
+                    merchant:merchant_id (
+                        id,
+                        normalized_name
+                    )
+                `)
+                .eq('user_id', user.id)
+                .order('action_date', { ascending: false })
+                .limit(limit);
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching recent subscription changes:', error);
+            throw error;
+        }
+    }
+
+    // Record subscription status change
+    async recordStatusChange(merchantId, action, reason, notes = null) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const record = {
+                merchant_id: merchantId,
+                user_id: user.id,
+                action: action, // 'activated' or 'deactivated'
+                action_date: new Date().toISOString(),
+                reason: reason,
+                notes: notes
+            };
+
+            const { data, error } = await this.table()
+                .insert([record])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error recording subscription status change:', error);
+            throw error;
+        }
+    }
+}
+
+// Merchant Split Rules Service
+class MerchantSplitRulesService extends SupabaseService {
+    constructor() {
+        super('merchant_split_rules');
+    }
+
+    /**
+     * Get all split rules (no user filter)
+     */
+    async getAll() {
+        try {
+            const { data, error } = await this.table()
+                .select('*')
+                .order('merchant_friendly_name');
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching merchant split rules:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get split rule by merchant friendly name
+     */
+    async getByMerchantName(merchantFriendlyName) {
+        try {
+            if (!merchantFriendlyName) return null;
+
+            const { data, error } = await this.table()
+                .select('*')
+                .eq('merchant_friendly_name', merchantFriendlyName)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+            return data || null;
+        } catch (error) {
+            console.error('Error fetching split rule by merchant name:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Add split rule (no user_id)
+     */
+    async add(record) {
+        try {
+            const snakeCaseRecord = this.toSnakeCase(record);
+
+            const { data, error } = await this.table()
+                .insert([snakeCaseRecord])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error adding merchant split rule:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update split rule
+     */
+    async update(id, updates) {
+        try {
+            const snakeCaseUpdates = this.toSnakeCase(updates);
+
+            const { data, error } = await this.table()
+                .update(snakeCaseUpdates)
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error updating merchant split rule:', error);
+            throw error;
+        }
+    }
+}
+
 // Export service instances
 export const supabaseAccountsDB = new SupabaseService('accounts');
 export const supabaseTransactionsDB = new TransactionService();
@@ -769,6 +1096,13 @@ export const supabaseBeliefTagsDB = new BeliefTagsService();
 export const supabaseUserPreferencesDB = new UserPreferencesService();
 export const supabaseProductMetadataDB = new ProductMetadataService();
 export const supabaseProfilesDB = new SupabaseService('profiles');
+
+// Import staging services
+export const supabaseImportStagingDB = new ImportStagingService();
+export const supabaseImportRawDataDB = new ImportRawDataService();
+export const supabaseColumnMappingsDB = new ColumnMappingsService();
+export const supabaseSubscriptionHistoryDB = new SubscriptionHistoryService();
+export const supabaseMerchantSplitRulesDB = new MerchantSplitRulesService();
 
 // Legacy/alias exports for backwards compatibility
 export const supabaseKnowledgeDB = supabaseBeliefTagsDB;
