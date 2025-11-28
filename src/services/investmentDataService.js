@@ -18,8 +18,8 @@ export const saveAccountInfo = async (accountInfo) => {
             currency: accountInfo.currency || 'CAD',
             opening_balance: parseFloat(accountInfo.openingBalance) || null,
             closing_balance: parseFloat(accountInfo.closingBalance) || null,
-            statement_date: accountInfo.statementDate || null,
-            statement_period: accountInfo.statementPeriod || null
+            statement_date: accountInfo.statementDate || null
+            // Note: statement_period removed - it's a text field that may not exist in DB schema
         };
 
         // Upsert: Update if exists, insert if not
@@ -51,15 +51,18 @@ export const saveHoldings = async (accountId, holdingsRows, asOfDate) => {
             .eq('account_id', accountId)
             .eq('as_of_date', asOfDate);
 
-        // Prepare holdings data
+        // Prepare holdings data with classification fields
         const holdingsData = holdingsRows.map(row => ({
             account_id: accountId,
             symbol: row.Symbol || row.symbol || '',
             security_name: row['Security Name'] || row.securityName || row.name || '',
+            asset_type: row.assetType || row.asset_type || null,
+            category: row.category || null,
+            sub_category: row.subCategory || row.sub_category || null,
             units: parseFloat(row.Units || row.units || row['Units/Shares'] || 0),
             price: parseFloat(row.Price || row.price || 0),
-            market_value: parseFloat(row['Market Value'] || row.marketValue || row['Market Val'] || 0),
-            book_value: parseFloat(row['Book Value'] || row.bookValue || row['Book Val'] || 0) || null,
+            market_value: parseFloat(row['Market Value'] || row.marketValue || row['Market Val'] || row.value || 0),
+            book_value: parseFloat(row['Book Value'] || row.bookValue || row['Book Val'] || row.bookCost || 0) || null,
             gain_loss: parseFloat(row['Gain/Loss'] || row.gainLoss || row['Gain Loss'] || 0) || null,
             as_of_date: asOfDate,
             currency: row.Currency || row.currency || 'CAD'
