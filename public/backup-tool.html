@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>localStorage Backup Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            padding: 2rem;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+
+        .info {
+            background: #e3f2fd;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 2rem;
+            border-left: 4px solid #2196f3;
+        }
+
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-right: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        button:hover {
+            background: #1976d2;
+        }
+
+        button.danger {
+            background: #f44336;
+        }
+
+        button.danger:hover {
+            background: #d32f2f;
+        }
+
+        button.success {
+            background: #4caf50;
+        }
+
+        button.success:hover {
+            background: #388e3c;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 400px;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .stat-card {
+            background: #f5f5f5;
+            padding: 1rem;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2196f3;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+
+        .extraction-item {
+            background: #fafafa;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .extraction-item h3 {
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .extraction-item p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .success-msg {
+            background: #c8e6c9;
+            color: #2e7d32;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔧 AI Extraction Backup Tool</h1>
+
+        <div class="info">
+            <strong>ℹ️ Instructions:</strong>
+            <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                <li>Open this page in the SAME BROWSER where you use the Personal Finance App</li>
+                <li>The app must be on the SAME DOMAIN (localhost or production)</li>
+                <li>Click "Load Data" to view your cached extractions</li>
+                <li>Use buttons to backup, export, or restore data</li>
+            </ol>
+        </div>
+
+        <div style="margin-bottom: 2rem;">
+            <button onclick="loadData()">📂 Load Data from localStorage</button>
+            <button onclick="copyToClipboard()" class="success">📋 Copy to Clipboard</button>
+            <button onclick="downloadJSON()" class="success">💾 Download JSON</button>
+            <button onclick="clearData()" class="danger">🗑️ Clear localStorage</button>
+        </div>
+
+        <div class="stats" id="stats" style="display: none;">
+            <div class="stat-card">
+                <div class="stat-value" id="extractionCount">0</div>
+                <div class="stat-label">Total Extractions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalTokens">0</div>
+                <div class="stat-label">Total Tokens Used</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="latestDate">N/A</div>
+                <div class="stat-label">Latest Extraction</div>
+            </div>
+        </div>
+
+        <div id="successMsg"></div>
+
+        <div id="extractionsList"></div>
+
+        <h2 style="margin-top: 2rem;">Raw JSON Data:</h2>
+        <textarea id="dataDisplay" readonly placeholder="Click 'Load Data' to display cached extractions..."></textarea>
+
+        <div style="margin-top: 2rem; padding: 1rem; background: #fff3cd; border-radius: 4px;">
+            <h3>📤 Restore Data</h3>
+            <p style="margin-top: 0.5rem; color: #666;">Paste JSON data below and click Restore to import:</p>
+            <textarea id="restoreData" placeholder='Paste JSON here: [{"timestamp":"..."}]'></textarea>
+            <button onclick="restoreData()" style="margin-top: 1rem;">⬆️ Restore to localStorage</button>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'ai_pdf_extractions';
+
+        function loadData() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                const textarea = document.getElementById('dataDisplay');
+
+                if (!data) {
+                    textarea.value = 'No data found in localStorage.\n\nMake sure:\n1. You opened this page in the same browser\n2. The domain matches your app (same localhost port or production URL)\n3. You have processed at least one PDF';
+                    return;
+                }
+
+                const extractions = JSON.parse(data);
+                textarea.value = JSON.stringify(extractions, null, 2);
+
+                // Display statistics
+                displayStats(extractions);
+                displayExtractionsList(extractions);
+
+                showSuccess(`✅ Loaded ${extractions.length} extractions from localStorage`);
+            } catch (error) {
+                alert('Error loading data: ' + error.message);
+            }
+        }
+
+        function displayStats(extractions) {
+            if (!extractions || extractions.length === 0) return;
+
+            const stats = document.getElementById('stats');
+            stats.style.display = 'grid';
+
+            document.getElementById('extractionCount').textContent = extractions.length;
+
+            const totalTokens = extractions.reduce((sum, e) => {
+                return sum + (e.tokensUsed?.total || e.tokensUsed?.total_tokens || 0);
+            }, 0);
+            document.getElementById('totalTokens').textContent = totalTokens.toLocaleString();
+
+            const latestDate = new Date(extractions[0].timestamp);
+            document.getElementById('latestDate').textContent = latestDate.toLocaleDateString();
+        }
+
+        function displayExtractionsList(extractions) {
+            const container = document.getElementById('extractionsList');
+            container.innerHTML = '<h2 style="margin-bottom: 1rem;">📋 Extraction History</h2>';
+
+            extractions.forEach((ext, idx) => {
+                const div = document.createElement('div');
+                div.className = 'extraction-item';
+
+                const date = new Date(ext.timestamp).toLocaleString();
+                const tokens = ext.tokensUsed?.total || ext.tokensUsed?.total_tokens || 'N/A';
+                const model = ext.model || 'Unknown';
+                const filename = ext.filename || 'Unknown PDF';
+
+                div.innerHTML = `
+                    <h3>#${idx + 1} - ${filename}</h3>
+                    <p><strong>Date:</strong> ${date}</p>
+                    <p><strong>Model:</strong> ${model}</p>
+                    <p><strong>Tokens:</strong> ${tokens}</p>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function copyToClipboard() {
+            const textarea = document.getElementById('dataDisplay');
+            if (!textarea.value || textarea.value.includes('No data found')) {
+                alert('Please load data first!');
+                return;
+            }
+
+            textarea.select();
+            document.execCommand('copy');
+            showSuccess('✅ Copied to clipboard! Paste into a text file to save.');
+        }
+
+        function downloadJSON() {
+            const textarea = document.getElementById('dataDisplay');
+            if (!textarea.value || textarea.value.includes('No data found')) {
+                alert('Please load data first!');
+                return;
+            }
+
+            const blob = new Blob([textarea.value], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ai-extractions-backup-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showSuccess('✅ JSON file downloaded! Save it safely.');
+        }
+
+        function clearData() {
+            if (!confirm('⚠️ Are you sure? This will delete all cached extractions from localStorage.\n\nMake sure you have a backup!')) {
+                return;
+            }
+
+            localStorage.removeItem(STORAGE_KEY);
+            document.getElementById('dataDisplay').value = '';
+            document.getElementById('extractionsList').innerHTML = '';
+            document.getElementById('stats').style.display = 'none';
+            showSuccess('✅ localStorage cleared');
+        }
+
+        function restoreData() {
+            const textarea = document.getElementById('restoreData');
+            if (!textarea.value.trim()) {
+                alert('Please paste JSON data first!');
+                return;
+            }
+
+            try {
+                const data = JSON.parse(textarea.value);
+                if (!Array.isArray(data)) {
+                    throw new Error('Data must be an array');
+                }
+
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                showSuccess(`✅ Restored ${data.length} extractions to localStorage`);
+
+                // Reload to display
+                loadData();
+                textarea.value = '';
+            } catch (error) {
+                alert('Invalid JSON format: ' + error.message);
+            }
+        }
+
+        function showSuccess(message) {
+            const div = document.getElementById('successMsg');
+            div.className = 'success-msg';
+            div.textContent = message;
+            setTimeout(() => { div.textContent = ''; div.className = ''; }, 5000);
+        }
+
+        // Auto-load on page load
+        window.addEventListener('load', loadData);
+    </script>
+</body>
+
+</html>

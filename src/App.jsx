@@ -19,6 +19,7 @@ import { UncategorizedReceipts } from './components/transactions/UncategorizedRe
 import { ImportMapper } from './pages/ImportMapper';
 import SubscriptionManager from './components/SubscriptionManager';
 import MerchantSplitRules from './components/MerchantSplitRules';
+import PDFTableReader from './pdfTableReader/tableReader';
 
 function App() {
   return (
@@ -57,6 +58,7 @@ function App() {
                           <Route path="import-mapper/:accountId" element={<ImportMapper />} />
                           <Route path="subscriptions" element={<SubscriptionManager />} />
                           <Route path="split-rules" element={<MerchantSplitRules />} />
+                          <Route path="pdf-reader" element={<PDFTableReader />} />
                         </Routes>
                       </main>
                     </div>
