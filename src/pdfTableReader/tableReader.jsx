@@ -495,7 +495,7 @@ const RealPDFParser = () => {
                                 accept=".pdf"
                                 onChange={handleFileUpload}
                                 className="hidden"
-                                disabled={!pythonServiceAvailable}
+                                disabled={extractionMethod === 'python' && !pythonServiceAvailable}
                             />
                             <div className="border-4 border-dashed border-blue-300 rounded-xl p-12 text-center hover:border-blue-500 hover:bg-blue-50 transition-all">
                                 <Upload className="w-16 h-16 mx-auto text-blue-500 mb-4" />
@@ -907,6 +907,7 @@ const RealPDFParser = () => {
                                                             <option value="ETF">ETF</option>
                                                             <option value="Bond">Bond</option>
                                                             <option value="Cash">Cash</option>
+                                                            <option value="REIT">REIT</option>
                                                         </select>
                                                     </div>
 
@@ -924,6 +925,7 @@ const RealPDFParser = () => {
                                                             <option value="Fixed Income">Fixed Income</option>
                                                             <option value="Money Market">Money Market</option>
                                                             <option value="Balanced">Balanced</option>
+                                                            <option value="Real Estate">Real Estate</option>
                                                         </select>
                                                     </div>
 

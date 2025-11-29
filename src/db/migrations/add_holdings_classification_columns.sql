@@ -12,6 +12,6 @@ CREATE INDEX IF NOT EXISTS idx_holdings_category ON personal_finance.holdings(ca
 CREATE INDEX IF NOT EXISTS idx_holdings_sub_category ON personal_finance.holdings(sub_category);
 
 -- Add comments to document the columns
-COMMENT ON COLUMN personal_finance.holdings.asset_type IS 'Type of asset: GIC, Mutual Fund, Stock, ETF, Bond, Cash';
-COMMENT ON COLUMN personal_finance.holdings.category IS 'Investment category: Canadian Equity, US Equity, International Equity, Fixed Income, Money Market, Balanced';
+COMMENT ON COLUMN personal_finance.holdings.asset_type IS 'Type of asset: GIC, Mutual Fund, Stock, ETF, Bond, Cash, REIT';
+COMMENT ON COLUMN personal_finance.holdings.category IS 'Investment category: Canadian Equity, US Equity, International Equity, Fixed Income, Money Market, Balanced, Real Estate';
 COMMENT ON COLUMN personal_finance.holdings.sub_category IS 'Sub-category: Index Fund, Growth Fund, Value Fund, etc.';
