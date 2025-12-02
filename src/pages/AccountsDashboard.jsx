@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Upload } from 'lucide-react';
 import { TransactionUpload } from '../components/transactions/TransactionUpload';
+import BankAccountDetailsModal from '../components/accounts/BankAccountDetailsModal';
 import { supabaseAccountsDB, supabaseTransactionsDB, supabaseChartOfAccountsDB, supabaseImportStagingDB, supabaseImportRawDataDB } from '../services/supabaseDatabase';
 import transactionService from '../services/transactionService';
 import Papa from 'papaparse';
@@ -11,6 +12,7 @@ export const AccountsDashboard = () => {
     const [accounts, setAccounts] = useState([]);
     const [uncategorizedCounts, setUncategorizedCounts] = useState({});
     const [pendingImportCounts, setPendingImportCounts] = useState({});
+    const [lastTransactionDates, setLastTransactionDates] = useState({});
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(false);
     const [chartOfAccounts, setChartOfAccounts] = useState([]);
@@ -41,6 +43,8 @@ export const AccountsDashboard = () => {
     const [selectedInvestmentType, setSelectedInvestmentType] = useState('');
     const [showAddInvestmentType, setShowAddInvestmentType] = useState(false);
     const [newInvestmentType, setNewInvestmentType] = useState('');
+    const [showBankDetailsModal, setShowBankDetailsModal] = useState(false);
+    const [selectedBankAccount, setSelectedBankAccount] = useState(null);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -64,12 +68,14 @@ export const AccountsDashboard = () => {
             );
             setSuspenseAccount(suspense);
 
-            const [counts, pending] = await Promise.all([
+            const [counts, pending, lastDates] = await Promise.all([
                 getUncategorizedCounts(),
-                getPendingImportCounts()
+                getPendingImportCounts(),
+                getLastTransactionDates()
             ]);
             setUncategorizedCounts(counts);
             setPendingImportCounts(pending);
+            setLastTransactionDates(lastDates);
 
         } catch (error) {
             console.error('Error loading accounts:', error);
@@ -118,6 +124,30 @@ export const AccountsDashboard = () => {
             return counts;
         } catch (error) {
             console.error('Error getting pending import counts:', error);
+            return {};
+        }
+    };
+
+    const getLastTransactionDates = async () => {
+        try {
+            // Get last transaction date for each account from transactions table
+            const { data, error } = await supabaseTransactionsDB.table()
+                .select('account_id, date')
+                .order('date', { ascending: false });
+
+            if (error) throw error;
+
+            // Group by account_id and get the most recent date
+            const dates = {};
+            (data || []).forEach(txn => {
+                if (!dates[txn.account_id]) {
+                    dates[txn.account_id] = txn.date;
+                }
+            });
+
+            return dates;
+        } catch (error) {
+            console.error('Error getting last transaction dates:', error);
             return {};
         }
     };
@@ -320,6 +350,7 @@ export const AccountsDashboard = () => {
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-20"></th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Last Update</th>
                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Pending Mapping</th>
                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Uncategorized Receipts</th>
                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase w-32">Actions</th>
@@ -329,6 +360,7 @@ export const AccountsDashboard = () => {
                         {filteredAccounts.map((account) => {
                             const count = uncategorizedCounts[account.id] || 0;
                             const pendingCount = pendingImportCounts[account.id] || 0;
+                            const lastDate = lastTransactionDates[account.id];
 
                             return (
                                 <tr key={account.id} className="hover:bg-gray-50">
@@ -340,7 +372,24 @@ export const AccountsDashboard = () => {
                                             Edit
                                         </button>
                                     </td>
-                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{account.name}</td>
+                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                                        <button
+                                            onClick={() => {
+                                                setSelectedBankAccount(account);
+                                                setShowBankDetailsModal(true);
+                                            }}
+                                            className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                                        >
+                                            {account.name}
+                                        </button>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-center text-gray-600">
+                                        {lastDate ? new Date(lastDate).toLocaleDateString('en-US', {
+                                            year: 'numeric',
+                                            month: 'short',
+                                            day: 'numeric'
+                                        }) : '-'}
+                                    </td>
                                     <td className="px-6 py-4 text-sm text-center">
                                         {pendingCount > 0 ? (
                                             <button
@@ -602,6 +651,17 @@ export const AccountsDashboard = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Bank Account Details Modal */}
+            {showBankDetailsModal && selectedBankAccount && (
+                <BankAccountDetailsModal
+                    account={selectedBankAccount}
+                    onClose={() => {
+                        setShowBankDetailsModal(false);
+                        setSelectedBankAccount(null);
+                    }}
+                />
             )}
         </div>
     );

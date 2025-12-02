@@ -4,6 +4,87 @@ import { supabase } from './supabaseClient';
  * Save extracted PDF data to Supabase investment tables
  */
 
+// Helper function to format date string properly without timezone shift
+const formatDateString = (dateStr) => {
+    if (!dateStr) return null;
+
+    // If already in YYYY-MM-DD format, return as-is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr;
+    }
+
+    // Parse the date and format it manually to avoid timezone issues
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return null;
+
+    // Use UTC methods to avoid timezone shift
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+};
+
+// =====================================================
+// INVESTMENT MANAGERS
+// =====================================================
+
+// Get all investment managers for the current user
+export const getInvestmentManagers = async () => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const { data, error } = await supabase
+            .from('investment_managers')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('name', { ascending: true });
+
+        if (error) throw error;
+
+        return { success: true, managers: data || [] };
+    } catch (error) {
+        console.error('❌ Error fetching investment managers:', error);
+        return { success: false, error: error.message, managers: [] };
+    }
+};
+
+// Create a new investment manager
+export const createInvestmentManager = async (managerData) => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const { data, error } = await supabase
+            .from('investment_managers')
+            .insert({
+                user_id: user.id,
+                name: managerData.name,
+                manager_type: managerData.managerType || 'Advisor',
+                description: managerData.description || null,
+                website: managerData.website || null,
+                contact_name: managerData.contactName || null,
+                contact_email: managerData.contactEmail || null,
+                contact_phone: managerData.contactPhone || null
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        console.log('✅ Investment manager created:', data);
+        return { success: true, manager: data };
+    } catch (error) {
+        console.error('❌ Error creating investment manager:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// =====================================================
+// INVESTMENT ACCOUNTS
+// =====================================================
+
 // 1. Save or update account info
 export const saveAccountInfo = async (accountInfo) => {
     try {
@@ -18,7 +99,9 @@ export const saveAccountInfo = async (accountInfo) => {
             currency: accountInfo.currency || 'CAD',
             opening_balance: parseFloat(accountInfo.openingBalance) || null,
             closing_balance: parseFloat(accountInfo.closingBalance) || null,
-            statement_date: accountInfo.statementDate || null
+            statement_date: accountInfo.statementDate || null,
+            display_name: accountInfo.displayName || null,
+            manager_id: accountInfo.managerId || null
             // Note: statement_period removed - it's a text field that may not exist in DB schema
         };
 
@@ -104,7 +187,7 @@ export const saveCashTransactions = async (accountId, transactionRows) => {
 
         const transactionsData = validRows.map(row => ({
             account_id: accountId,
-            transaction_date: row.Date || row.date,
+            transaction_date: formatDateString(row.Date || row.date),
             description: row.Description || row['Item Description'] || row.description || '',
             transaction_type: classifyTransactionType(row.Description || row['Item Description'] || ''),
             debit: parseFloat(row.Debit || row.debit || 0),
@@ -152,7 +235,7 @@ export const saveInvestmentTransactions = async (accountId, transactionRows) => 
 
         const transactionsData = validRows.map(row => ({
             account_id: accountId,
-            transaction_date: row.Date || row.date,
+            transaction_date: formatDateString(row.Date || row.date),
             symbol: row.Symbol || row.symbol || null,
             security_name: row['Security Name'] || row.securityName || row.Description || row.description || '',
             transaction_type: row['Transaction Type'] || row.transactionType || classifyInvestmentType(row.Description || row.description || ''),
@@ -164,17 +247,38 @@ export const saveInvestmentTransactions = async (accountId, transactionRows) => 
             description: row.Description || row['Item Description'] || row.description || ''
         }));
 
+        // Get existing transactions for this account to check for duplicates
+        // This handles NULL values in symbol which upsert doesn't handle well
+        const { data: existingTxns } = await supabase
+            .from('investment_transactions')
+            .select('transaction_date, symbol, transaction_type, units, amount')
+            .eq('account_id', accountId);
+
+        // Filter out duplicates manually
+        const existingSet = new Set(
+            (existingTxns || []).map(t =>
+                `${t.transaction_date}|${t.symbol || ''}|${t.transaction_type}|${t.units || ''}|${t.amount}`
+            )
+        );
+
+        const newTransactions = transactionsData.filter(t => {
+            const key = `${t.transaction_date}|${t.symbol || ''}|${t.transaction_type}|${t.units || ''}|${t.amount}`;
+            return !existingSet.has(key);
+        });
+
+        if (newTransactions.length === 0) {
+            console.log('⚠️ All investment transactions already exist, skipping');
+            return { success: true, count: 0, transactions: [] };
+        }
+
         const { data, error } = await supabase
             .from('investment_transactions')
-            .upsert(transactionsData, {
-                onConflict: 'account_id,transaction_date,symbol,transaction_type,units,amount',
-                ignoreDuplicates: true
-            })
+            .insert(newTransactions)
             .select();
 
         if (error) throw error;
 
-        console.log(`✅ ${data.length} investment transactions saved`);
+        console.log(`✅ ${data.length} investment transactions saved (${transactionsData.length - newTransactions.length} duplicates skipped)`);
         return { success: true, count: data.length, transactions: data };
     } catch (error) {
         console.error('❌ Error saving investment transactions:', error);
@@ -221,6 +325,28 @@ export const saveCompleteExtraction = async (accountInfo, tables) => {
                     results.holdings = holdingsResult;
                     if (!holdingsResult.success) {
                         results.errors.push(`Holdings: ${holdingsResult.error}`);
+                    }
+                    break;
+
+                case 'fees':
+                    // Transform fees to cash transactions format
+                    const feeRows = rows.map(row => ({
+                        Date: row.date || row.Date,
+                        Description: row.description || row.Description || 'Fee',
+                        Debit: parseFloat(row.amount || row.Amount || row.debit || row.Debit || 0),
+                        Credit: 0,
+                        Balance: null
+                    }));
+                    const feesResult = await saveCashTransactions(accountId, feeRows);
+                    // Store fees result in cashTransactions if not already set
+                    if (!results.cashTransactions) {
+                        results.cashTransactions = feesResult;
+                    } else if (feesResult.success) {
+                        // Merge fee counts with existing cash transactions
+                        results.cashTransactions.count = (results.cashTransactions.count || 0) + feesResult.count;
+                    }
+                    if (!feesResult.success) {
+                        results.errors.push(`Fees: ${feesResult.error}`);
                     }
                     break;
 
@@ -289,10 +415,293 @@ const classifyInvestmentType = (description) => {
     return 'Other';
 };
 
+// Get all investment accounts for the current user (with manager info)
+export const getInvestmentAccounts = async () => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const { data, error } = await supabase
+            .from('investment_accounts')
+            .select(`
+                *,
+                manager:investment_managers(id, name, manager_type)
+            `)
+            .eq('user_id', user.id)
+            .order('institution', { ascending: true });
+
+        if (error) throw error;
+
+        return { success: true, accounts: data || [] };
+    } catch (error) {
+        console.error('❌ Error fetching investment accounts:', error);
+        return { success: false, error: error.message, accounts: [] };
+    }
+};
+
+// Get last transaction date for each investment account
+export const getLastTransactionDates = async () => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        // First get all investment accounts for this user
+        const { data: accounts, error: accountsError } = await supabase
+            .from('investment_accounts')
+            .select('id')
+            .eq('user_id', user.id);
+
+        if (accountsError) throw accountsError;
+
+        const accountIds = (accounts || []).map(a => a.id);
+        if (accountIds.length === 0) {
+            return { success: true, dates: {} };
+        }
+
+        // Get last transaction date for each account
+        const { data, error } = await supabase
+            .from('investment_transactions')
+            .select('account_id, transaction_date')
+            .in('account_id', accountIds)
+            .order('transaction_date', { ascending: false });
+
+        if (error) throw error;
+
+        // Group by account_id and get the most recent date
+        const dates = {};
+        (data || []).forEach(txn => {
+            if (!dates[txn.account_id]) {
+                dates[txn.account_id] = txn.transaction_date;
+            }
+        });
+
+        return { success: true, dates };
+    } catch (error) {
+        console.error('❌ Error getting last transaction dates:', error);
+        return { success: false, error: error.message, dates: {} };
+    }
+};
+
+// Get last holdings date for each investment account
+export const getLastHoldingsDates = async () => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        // First get all investment accounts for this user
+        const { data: accounts, error: accountsError } = await supabase
+            .from('investment_accounts')
+            .select('id')
+            .eq('user_id', user.id);
+
+        if (accountsError) throw accountsError;
+
+        const accountIds = (accounts || []).map(a => a.id);
+        if (accountIds.length === 0) {
+            return { success: true, dates: {} };
+        }
+
+        // Get last holdings date for each account
+        const { data, error } = await supabase
+            .from('holdings')
+            .select('account_id, as_of_date')
+            .in('account_id', accountIds)
+            .order('as_of_date', { ascending: false });
+
+        if (error) throw error;
+
+        // Group by account_id and get the most recent date
+        const dates = {};
+        (data || []).forEach(holding => {
+            if (!dates[holding.account_id]) {
+                dates[holding.account_id] = holding.as_of_date;
+            }
+        });
+
+        return { success: true, dates };
+    } catch (error) {
+        console.error('❌ Error getting last holdings dates:', error);
+        return { success: false, error: error.message, dates: {} };
+    }
+};
+
+// Get latest market value for each investment account (calculated from holdings)
+export const getLatestMarketValues = async () => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        // Get all investment accounts for this user
+        const { data: accounts, error: accountsError } = await supabase
+            .from('investment_accounts')
+            .select('id')
+            .eq('user_id', user.id);
+
+        if (accountsError) throw accountsError;
+
+        const accountIds = (accounts || []).map(a => a.id);
+        if (accountIds.length === 0) {
+            return { success: true, values: {} };
+        }
+
+        // Get all holdings for these accounts
+        const { data: holdings, error: holdingsError } = await supabase
+            .from('holdings')
+            .select('account_id, as_of_date, market_value')
+            .in('account_id', accountIds)
+            .order('as_of_date', { ascending: false });
+
+        if (holdingsError) throw holdingsError;
+
+        // For each account, find the latest date and sum market values for that date
+        const values = {};
+        const latestDates = {};
+
+        // First pass: find the latest date for each account
+        (holdings || []).forEach(holding => {
+            if (!latestDates[holding.account_id]) {
+                latestDates[holding.account_id] = holding.as_of_date;
+            }
+        });
+
+        // Second pass: sum market values for the latest date of each account
+        (holdings || []).forEach(holding => {
+            if (holding.as_of_date === latestDates[holding.account_id]) {
+                values[holding.account_id] = (values[holding.account_id] || 0) + (parseFloat(holding.market_value) || 0);
+            }
+        });
+
+        return { success: true, values };
+    } catch (error) {
+        console.error('❌ Error getting latest market values:', error);
+        return { success: false, error: error.message, values: {} };
+    }
+};
+
+// Get existing holdings for an account
+export const getHoldingsForAccount = async (accountId) => {
+    try {
+        const { data, error } = await supabase
+            .from('holdings')
+            .select('*')
+            .eq('account_id', accountId)
+            .order('as_of_date', { ascending: false });
+
+        if (error) throw error;
+
+        return { success: true, holdings: data || [] };
+    } catch (error) {
+        console.error('❌ Error getting holdings for account:', error);
+        return { success: false, error: error.message, holdings: [] };
+    }
+};
+
+// Get existing cash transactions (fees) for an account
+export const getCashTransactionsForAccount = async (accountId) => {
+    try {
+        const { data, error } = await supabase
+            .from('cash_transactions')
+            .select('*')
+            .eq('account_id', accountId)
+            .order('transaction_date', { ascending: false });
+
+        if (error) throw error;
+
+        return { success: true, transactions: data || [] };
+    } catch (error) {
+        console.error('❌ Error getting cash transactions for account:', error);
+        return { success: false, error: error.message, transactions: [] };
+    }
+};
+
+// Get existing investment transactions for an account
+export const getInvestmentTransactionsForAccount = async (accountId) => {
+    try {
+        const { data, error } = await supabase
+            .from('investment_transactions')
+            .select('*')
+            .eq('account_id', accountId)
+            .order('transaction_date', { ascending: false });
+
+        if (error) throw error;
+
+        return { success: true, transactions: data || [] };
+    } catch (error) {
+        console.error('❌ Error getting investment transactions for account:', error);
+        return { success: false, error: error.message, transactions: [] };
+    }
+};
+
+// Find account by account number and institution
+export const findAccountByNumber = async (accountNumber, institution) => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const { data, error } = await supabase
+            .from('investment_accounts')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('account_number', accountNumber)
+            .eq('institution', institution)
+            .single();
+
+        if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows found
+
+        return { success: true, account: data || null };
+    } catch (error) {
+        console.error('❌ Error finding account:', error);
+        return { success: false, error: error.message, account: null };
+    }
+};
+
+// Update investment account (rename, change manager, etc.)
+export const updateInvestmentAccount = async (accountId, updates) => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
+        const { data, error } = await supabase
+            .from('investment_accounts')
+            .update({
+                display_name: updates.displayName,
+                manager_id: updates.managerId || null,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', accountId)
+            .eq('user_id', user.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        console.log('✅ Investment account updated:', data);
+        return { success: true, account: data };
+    } catch (error) {
+        console.error('❌ Error updating investment account:', error);
+        return { success: false, error: error.message };
+    }
+};
+
 export default {
+    // Managers
+    getInvestmentManagers,
+    createInvestmentManager,
+    // Accounts
     saveAccountInfo,
+    getInvestmentAccounts,
+    getLastTransactionDates,
+    getLastHoldingsDates,
+    getLatestMarketValues,
+    findAccountByNumber,
+    updateInvestmentAccount,
+    // Holdings & Transactions
     saveHoldings,
     saveCashTransactions,
     saveInvestmentTransactions,
-    saveCompleteExtraction
+    saveCompleteExtraction,
+    // Get existing data
+    getHoldingsForAccount,
+    getCashTransactionsForAccount,
+    getInvestmentTransactionsForAccount
 };

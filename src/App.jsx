@@ -15,6 +15,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import { AccountsDashboard } from './pages/AccountsDashboard';
+import { InvestmentAccountsDashboard } from './pages/InvestmentAccountsDashboard';
 import { UncategorizedReceipts } from './components/transactions/UncategorizedReceipts';
 import { ImportMapper } from './pages/ImportMapper';
 import SubscriptionManager from './components/SubscriptionManager';
@@ -54,6 +55,7 @@ function App() {
                           <Route path="ai-advisor" element={<AIAdvisor />} />
                           <Route path="settings" element={<Settings />} />
                           <Route path="accounts" element={<AccountsDashboard />} />
+                          <Route path="investments" element={<InvestmentAccountsDashboard />} />
                           <Route path="uncategorized-receipts/:accountId" element={<UncategorizedReceipts />} />
                           <Route path="import-mapper/:accountId" element={<ImportMapper />} />
                           <Route path="subscriptions" element={<SubscriptionManager />} />

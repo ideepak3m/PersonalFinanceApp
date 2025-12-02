@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Table, CheckCircle, AlertTriangle, Eye, Download, RefreshCw, FileText, Sparkles, Key } from 'lucide-react';
+import { Upload, Table, CheckCircle, AlertTriangle, Eye, Download, RefreshCw, FileText, Sparkles, Key, Plus, Database } from 'lucide-react';
 import { extractTablesWithPython, checkPythonServiceHealth } from '../services/pythonBackendService';
 import { extractTablesWithVision, getClaudeApiKey, setClaudeApiKey } from '../services/pdfVisionExtractor';
-import { saveCompleteExtraction } from '../services/investmentDataService';
+import { saveCompleteExtraction, getInvestmentAccounts, getInvestmentManagers, createInvestmentManager, findAccountByNumber, getHoldingsForAccount, getCashTransactionsForAccount, getInvestmentTransactionsForAccount } from '../services/investmentDataService';
 
 const RealPDFParser = () => {
     const [file, setFile] = useState(null);
@@ -20,6 +20,56 @@ const RealPDFParser = () => {
     const [rawExtractedData, setRawExtractedData] = useState(null); // Store raw vision data
     const [showHoldingsReview, setShowHoldingsReview] = useState(false);
     const [reviewedHoldings, setReviewedHoldings] = useState([]);
+
+    // Investment account and manager state
+    const [investmentAccounts, setInvestmentAccounts] = useState([]);
+    const [investmentManagers, setInvestmentManagers] = useState([]);
+    const [selectedAccountId, setSelectedAccountId] = useState('');
+    const [selectedManagerId, setSelectedManagerId] = useState('');
+    const [accountDisplayName, setAccountDisplayName] = useState('');
+    const [showNewManagerModal, setShowNewManagerModal] = useState(false);
+    const [newManagerName, setNewManagerName] = useState('');
+    const [newManagerType, setNewManagerType] = useState('Advisor');
+
+    // Manual account info fields (for Python extraction or missing data)
+    const [manualAccountNumber, setManualAccountNumber] = useState('');
+    const [manualInstitution, setManualInstitution] = useState('');
+    const [manualAccountType, setManualAccountType] = useState('');
+
+    // Existing data from database
+    const [existingData, setExistingData] = useState({
+        account: null,
+        holdings: [],
+        cashTransactions: [],
+        investmentTransactions: []
+    });
+    const [loadingExistingData, setLoadingExistingData] = useState(false);
+
+    // Load investment accounts and managers on mount
+    useEffect(() => {
+        const loadAccountsAndManagers = async () => {
+            try {
+                const [accountsResult, managersResult] = await Promise.all([
+                    getInvestmentAccounts(),
+                    getInvestmentManagers()
+                ]);
+
+                if (accountsResult.success) {
+                    setInvestmentAccounts(accountsResult.accounts);
+                    console.log('✅ Loaded investment accounts:', accountsResult.accounts.length);
+                }
+
+                if (managersResult.success) {
+                    setInvestmentManagers(managersResult.managers);
+                    console.log('✅ Loaded investment managers:', managersResult.managers.length);
+                }
+            } catch (error) {
+                console.error('Error loading accounts/managers:', error);
+            }
+        };
+
+        loadAccountsAndManagers();
+    }, []);
 
     // Load cached data on mount
     useEffect(() => {
@@ -66,6 +116,34 @@ const RealPDFParser = () => {
             console.log('✅ Claude API key loaded from environment');
         }
     }, []);
+
+    // Handle creating a new investment manager
+    const handleCreateManager = async () => {
+        if (!newManagerName.trim()) {
+            setError('Please enter a manager name');
+            return;
+        }
+
+        try {
+            const result = await createInvestmentManager({
+                name: newManagerName.trim(),
+                managerType: newManagerType
+            });
+
+            if (result.success) {
+                setInvestmentManagers([...investmentManagers, result.manager]);
+                setSelectedManagerId(result.manager.id);
+                setShowNewManagerModal(false);
+                setNewManagerName('');
+                setNewManagerType('Advisor');
+                console.log('✅ Created new manager:', result.manager);
+            } else {
+                setError('Failed to create manager: ' + result.error);
+            }
+        } catch (error) {
+            setError('Error creating manager: ' + error.message);
+        }
+    };
 
     // Handle API key save
     const handleSaveApiKey = () => {
@@ -277,30 +355,143 @@ const RealPDFParser = () => {
     };
 
     // Open holdings review before saving
-    const handleOpenHoldingsReview = () => {
-        // Find holdings table
-        const holdingsTable = extractedTables.find(t => t.dataType === 'holdings');
+    const handleOpenHoldingsReview = async () => {
+        // Find holdings table - check for both classified and unclassified tables
+        let holdingsTable = extractedTables.find(t => t.dataType === 'holdings');
+
+        // If no holdings table found, check if any table might be holdings (for Python extraction)
         if (!holdingsTable) {
-            setError('No holdings found to review');
-            return;
+            // Look for tables with columns that suggest holdings data
+            holdingsTable = extractedTables.find(t => {
+                const headers = (t.headers || []).map(h => h.toLowerCase());
+                return headers.some(h =>
+                    h.includes('security') || h.includes('symbol') ||
+                    h.includes('units') || h.includes('shares') ||
+                    h.includes('market value') || h.includes('book')
+                );
+            });
+
+            // If found, mark it as holdings
+            if (holdingsTable) {
+                holdingsTable = { ...holdingsTable, dataType: 'holdings' };
+            }
         }
 
-        // Only initialize if not already reviewed (preserve user edits)
-        if (reviewedHoldings.length === 0) {
-            const initialReview = holdingsTable.rows.map((row, idx) => ({
-                id: idx,
-                security: row.security || '',
-                symbol: '',
-                securityName: '',
-                assetType: '',
-                category: '',
-                subCategory: '',
-                units: row.units || 0,
-                price: row.price || 0,
-                value: row.value || 0,
-                bookCost: row.bookCost || 0
-            }));
-            setReviewedHoldings(initialReview);
+        // If still no holdings table, allow opening modal for account setup only
+        if (!holdingsTable) {
+            console.log('⚠️ No holdings table found, opening modal for account setup only');
+            // Create empty holdings table placeholder
+            holdingsTable = { rows: [] };
+        }
+
+        // Pre-populate manual account fields from localStorage
+        const accountInfoStr = localStorage.getItem('current_statement_account');
+        if (accountInfoStr) {
+            const accountInfo = JSON.parse(accountInfoStr);
+            setManualAccountNumber(accountInfo.accountNumber || '');
+            setManualInstitution(accountInfo.institution || '');
+            setManualAccountType(accountInfo.accountType || '');
+        }
+
+        // Try to load existing data from database based on account info
+        setLoadingExistingData(true);
+        try {
+            if (accountInfoStr) {
+                const accountInfo = JSON.parse(accountInfoStr);
+                const accountResult = await findAccountByNumber(accountInfo.accountNumber, accountInfo.institution);
+
+                if (accountResult.success && accountResult.account) {
+                    const account = accountResult.account;
+
+                    // Load existing data for this account
+                    const [holdingsResult, cashResult, invResult] = await Promise.all([
+                        getHoldingsForAccount(account.id),
+                        getCashTransactionsForAccount(account.id),
+                        getInvestmentTransactionsForAccount(account.id)
+                    ]);
+
+                    const existingHoldings = holdingsResult.holdings || [];
+
+                    setExistingData({
+                        account: account,
+                        holdings: existingHoldings,
+                        cashTransactions: cashResult.transactions || [],
+                        investmentTransactions: invResult.transactions || []
+                    });
+
+                    // Auto-fill display name and manager if account exists
+                    if (account.display_name) {
+                        setAccountDisplayName(account.display_name);
+                    }
+                    if (account.manager_id) {
+                        setSelectedManagerId(account.manager_id);
+                    }
+                    // Also fill manual fields from existing account
+                    setManualAccountNumber(account.account_number || '');
+                    setManualInstitution(account.institution || '');
+                    setManualAccountType(account.account_type || '');
+
+                    // Initialize reviewed holdings with existing data matched by security name
+                    if (reviewedHoldings.length === 0 && holdingsTable.rows.length > 0) {
+                        const initialReview = holdingsTable.rows.map((row, idx) => {
+                            const securityName = row.security || row.securityName || '';
+
+                            // Try to find matching existing holding by security name (case-insensitive partial match)
+                            const matchingExisting = existingHoldings.find(existing =>
+                                existing.security_name && securityName &&
+                                (existing.security_name.toLowerCase().includes(securityName.toLowerCase().substring(0, 20)) ||
+                                    securityName.toLowerCase().includes(existing.security_name.toLowerCase().substring(0, 20)))
+                            );
+
+                            return {
+                                id: idx,
+                                security: securityName,
+                                // Auto-populate from existing holding if found
+                                symbol: matchingExisting?.symbol || row.symbol || '',
+                                securityName: matchingExisting?.security_name || securityName,
+                                assetType: matchingExisting?.asset_type || row.assetType || '',
+                                category: matchingExisting?.category || row.category || '',
+                                subCategory: matchingExisting?.sub_category || row.subCategory || '',
+                                units: row.units || 0,
+                                price: row.price || 0,
+                                value: row.value || 0,
+                                bookCost: row.bookCost || 0
+                            };
+                        });
+                        setReviewedHoldings(initialReview);
+                    }
+
+                    console.log('✅ Loaded existing data:', {
+                        holdings: existingHoldings.length,
+                        cashTransactions: cashResult.transactions?.length || 0,
+                        investmentTransactions: invResult.transactions?.length || 0
+                    });
+                } else {
+                    setExistingData({ account: null, holdings: [], cashTransactions: [], investmentTransactions: [] });
+
+                    // Initialize without existing data
+                    if (reviewedHoldings.length === 0) {
+                        const initialReview = holdingsTable.rows.map((row, idx) => ({
+                            id: idx,
+                            security: row.security || row.securityName || '',
+                            symbol: row.symbol || '',
+                            securityName: row.security || row.securityName || '',
+                            assetType: row.assetType || '',
+                            category: row.category || '',
+                            subCategory: row.subCategory || '',
+                            units: row.units || 0,
+                            price: row.price || 0,
+                            value: row.value || 0,
+                            bookCost: row.bookCost || 0
+                        }));
+                        setReviewedHoldings(initialReview);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error loading existing data:', err);
+        } finally {
+            setLoadingExistingData(false);
         }
 
         setShowHoldingsReview(true);
@@ -315,31 +506,71 @@ const RealPDFParser = () => {
 
     // Save to database after review
     const handleSaveToDatabase = async () => {
+        // Validate required fields
+        if (!accountDisplayName || !accountDisplayName.trim()) {
+            setError('Please provide a Display Name for this account');
+            return;
+        }
+        if (!manualAccountNumber || !manualAccountNumber.trim()) {
+            setError('Please provide an Account Number');
+            return;
+        }
+        if (!manualInstitution || !manualInstitution.trim()) {
+            setError('Please provide an Institution name');
+            return;
+        }
+        if (!manualAccountType || !manualAccountType.trim()) {
+            setError('Please select an Account Type');
+            return;
+        }
+
         setSavingToDB(true);
         setSaveSuccess(null);
         setError(null);
         setShowHoldingsReview(false);
 
         try {
-            const accountInfoStr = localStorage.getItem('current_statement_account');
-            if (!accountInfoStr) {
-                throw new Error('No account information found. Please extract data first.');
+            // Build account info from manual fields (works for both Python and Vision extraction)
+            const accountInfo = {
+                accountNumber: manualAccountNumber.trim(),
+                institution: manualInstitution.trim(),
+                accountType: manualAccountType.trim(),
+                displayName: accountDisplayName.trim(),
+                managerId: selectedManagerId || null,
+                statementDate: new Date().toISOString().split('T')[0],
+                currency: 'CAD'
+            };
+
+            // Try to get additional info from localStorage if available
+            const storedInfoStr = localStorage.getItem('current_statement_account');
+            if (storedInfoStr) {
+                const storedInfo = JSON.parse(storedInfoStr);
+                accountInfo.statementDate = storedInfo.statementDate || accountInfo.statementDate;
+                accountInfo.openingBalance = storedInfo.openingBalance || null;
+                accountInfo.closingBalance = storedInfo.closingBalance || null;
             }
 
-            const accountInfo = JSON.parse(accountInfoStr);
+            // Check if there are other tables besides holdings (fees, transactions)
+            const hasOtherTables = extractedTables.some(t =>
+                t.dataType !== 'holdings' && t.rows && t.rows.length > 0
+            );
 
             // Replace holdings table rows with reviewed holdings that have required fields
             const updatedTables = extractedTables.map(table => {
                 if (table.dataType === 'holdings' && reviewedHoldings.length > 0) {
                     // Only include holdings where user provided symbol and security name
+                    // Allow partial save - only save holdings that are complete
                     const validHoldings = reviewedHoldings.filter(h =>
                         h.symbol && h.symbol.trim() !== '' &&
                         h.securityName && h.securityName.trim() !== ''
                     );
 
-                    if (validHoldings.length === 0) {
-                        throw new Error('Please provide Symbol and Security Name for at least one holding');
+                    // Log what we're saving
+                    const skippedCount = reviewedHoldings.length - validHoldings.length;
+                    if (skippedCount > 0) {
+                        console.log(`⚠️ Skipping ${skippedCount} holdings without symbol/security name`);
                     }
+                    console.log(`✅ Saving ${validHoldings.length} valid holdings`);
 
                     return {
                         ...table,
@@ -359,11 +590,31 @@ const RealPDFParser = () => {
                 return table;
             });
 
+            // Check if there's anything to save
+            const hasValidHoldings = updatedTables.some(t => t.dataType === 'holdings' && t.rows && t.rows.length > 0);
+            if (!hasValidHoldings && !hasOtherTables) {
+                throw new Error('Nothing to save. Please fill in at least one holding (Symbol + Security Name), or ensure there are fees/transactions to import.');
+            }
+
             console.log('💾 Saving to database...', { accountInfo, tables: updatedTables, reviewedHoldings });
             const result = await saveCompleteExtraction(accountInfo, updatedTables);
 
             if (result.success) {
                 setSaveSuccess(result.message);
+                // Reset account selection state
+                setAccountDisplayName('');
+                setSelectedManagerId('');
+                setSelectedAccountId('');
+                setManualAccountNumber('');
+                setManualInstitution('');
+                setManualAccountType('');
+                setReviewedHoldings([]);
+                setExistingData({ account: null, holdings: [], cashTransactions: [], investmentTransactions: [] });
+                // Reload accounts list
+                const accountsResult = await getInvestmentAccounts();
+                if (accountsResult.success) {
+                    setInvestmentAccounts(accountsResult.accounts);
+                }
                 console.log('✅ Save complete:', result.results);
             } else {
                 throw new Error(result.message);
@@ -802,6 +1053,215 @@ const RealPDFParser = () => {
 
                             {/* Modal Content */}
                             <div className="flex-1 overflow-y-auto p-6">
+                                {/* Account & Manager Selection Section */}
+                                <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                    <h3 className="font-semibold text-blue-900 mb-4 flex items-center gap-2">
+                                        <FileText className="w-5 h-5" />
+                                        Account Information
+                                    </h3>
+
+                                    {/* Row 1: Core Account Details */}
+                                    <div className="grid grid-cols-4 gap-4 mb-4">
+                                        {/* Account Number */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Account Number *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={manualAccountNumber}
+                                                onChange={(e) => setManualAccountNumber(e.target.value)}
+                                                placeholder="e.g., 12345678"
+                                                className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+
+                                        {/* Institution */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Institution *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={manualInstitution}
+                                                onChange={(e) => setManualInstitution(e.target.value)}
+                                                placeholder="e.g., Olympia Trust"
+                                                className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+
+                                        {/* Account Type */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Account Type *
+                                            </label>
+                                            <select
+                                                value={manualAccountType}
+                                                onChange={(e) => setManualAccountType(e.target.value)}
+                                                className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="">-- Select Type --</option>
+                                                <option value="RRSP">RRSP</option>
+                                                <option value="TFSA">TFSA</option>
+                                                <option value="RESP">RESP</option>
+                                                <option value="LIRA">LIRA</option>
+                                                <option value="LIF">LIF</option>
+                                                <option value="RRIF">RRIF</option>
+                                                <option value="Non-Registered">Non-Registered</option>
+                                                <option value="Margin">Margin Account</option>
+                                                <option value="Corporate">Corporate Account</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Display Name */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Display Name *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={accountDisplayName}
+                                                onChange={(e) => setAccountDisplayName(e.target.value)}
+                                                placeholder="e.g., Olympia RRSP"
+                                                className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Row 2: Manager and Link */}
+                                    <div className="grid grid-cols-3 gap-4">
+                                        {/* Managed By */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Managed By
+                                            </label>
+                                            <div className="flex gap-2">
+                                                <select
+                                                    value={selectedManagerId}
+                                                    onChange={(e) => setSelectedManagerId(e.target.value)}
+                                                    className="flex-1 px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">-- Select Manager --</option>
+                                                    {investmentManagers.map(manager => (
+                                                        <option key={manager.id} value={manager.id}>
+                                                            {manager.name} ({manager.manager_type})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    onClick={() => setShowNewManagerModal(true)}
+                                                    className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                                    title="Add new manager"
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-1">Investment advisor or custodian</p>
+                                        </div>
+
+                                        {/* Existing Account (if linking to one) */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Link to Existing Account
+                                            </label>
+                                            <select
+                                                value={selectedAccountId}
+                                                onChange={(e) => {
+                                                    setSelectedAccountId(e.target.value);
+                                                    // Auto-fill from selected account
+                                                    const account = investmentAccounts.find(a => a.id === e.target.value);
+                                                    if (account) {
+                                                        setAccountDisplayName(account.display_name || `${account.institution} ${account.account_type}`);
+                                                        setManualAccountNumber(account.account_number || '');
+                                                        setManualInstitution(account.institution || '');
+                                                        setManualAccountType(account.account_type || '');
+                                                        if (account.manager_id) {
+                                                            setSelectedManagerId(account.manager_id);
+                                                        }
+                                                    }
+                                                }}
+                                                className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="">-- Create New --</option>
+                                                {investmentAccounts.map(account => (
+                                                    <option key={account.id} value={account.id}>
+                                                        {account.display_name || `${account.institution} - ${account.account_type}`}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-xs text-gray-500 mt-1">Or create new account</p>
+                                        </div>
+
+                                        {/* Extraction Method Info */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Extraction Info
+                                            </label>
+                                            <div className="px-3 py-2 bg-gray-100 rounded-lg text-sm text-gray-600">
+                                                {extractionMethod === 'vision' ? '👁️ Claude Vision AI' : '🐍 Python Backend'}
+                                                <div className="text-xs mt-1">{file?.name}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Existing Data Summary */}
+                                {loadingExistingData ? (
+                                    <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                        <div className="flex items-center gap-2 text-gray-600">
+                                            <RefreshCw className="w-5 h-5 animate-spin" />
+                                            Loading existing data...
+                                        </div>
+                                    </div>
+                                ) : existingData.account && (
+                                    <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                                        <h3 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                                            <Database className="w-5 h-5" />
+                                            Existing Data in Database
+                                        </h3>
+                                        <div className="grid grid-cols-4 gap-4 text-sm">
+                                            <div className="bg-white p-3 rounded border">
+                                                <div className="text-2xl font-bold text-green-600">{existingData.holdings.length}</div>
+                                                <div className="text-gray-600">Holdings</div>
+                                                {existingData.holdings.length > 0 && (
+                                                    <div className="text-xs text-gray-500 mt-1">
+                                                        Latest: {new Date(existingData.holdings[0].as_of_date).toLocaleDateString()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="bg-white p-3 rounded border">
+                                                <div className="text-2xl font-bold text-purple-600">{existingData.cashTransactions.length}</div>
+                                                <div className="text-gray-600">Fees/Cash Txns</div>
+                                                {existingData.cashTransactions.length > 0 && (
+                                                    <div className="text-xs text-gray-500 mt-1">
+                                                        Latest: {new Date(existingData.cashTransactions[0].transaction_date).toLocaleDateString()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="bg-white p-3 rounded border">
+                                                <div className="text-2xl font-bold text-blue-600">{existingData.investmentTransactions.length}</div>
+                                                <div className="text-gray-600">Investment Txns</div>
+                                                {existingData.investmentTransactions.length > 0 && (
+                                                    <div className="text-xs text-gray-500 mt-1">
+                                                        Latest: {new Date(existingData.investmentTransactions[0].transaction_date).toLocaleDateString()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="bg-white p-3 rounded border">
+                                                <div className="text-lg font-medium text-gray-700">{existingData.account.display_name || 'No display name'}</div>
+                                                <div className="text-gray-600 text-xs">{existingData.account.institution}</div>
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                    {existingData.account.account_type}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-green-700 mt-3">
+                                            ✓ Duplicate records will be automatically skipped during import
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Holdings List */}
                                 <div className="space-y-6">
                                     {reviewedHoldings.map((holding) => (
                                         <div key={holding.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
@@ -956,11 +1416,71 @@ const RealPDFParser = () => {
                                 </button>
                                 <button
                                     onClick={handleSaveToDatabase}
-                                    disabled={savingToDB}
+                                    disabled={savingToDB || !accountDisplayName}
                                     className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
                                 >
                                     <Download className="w-4 h-4" />
                                     {savingToDB ? 'Saving...' : 'Save to Database'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* New Manager Modal */}
+                {showNewManagerModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+                        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4">Add New Investment Manager</h3>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Manager Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={newManagerName}
+                                        onChange={(e) => setNewManagerName(e.target.value)}
+                                        placeholder="e.g., Olympia Trust, CI Assante"
+                                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Manager Type
+                                    </label>
+                                    <select
+                                        value={newManagerType}
+                                        onChange={(e) => setNewManagerType(e.target.value)}
+                                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="Advisor">Advisor</option>
+                                        <option value="Dealer">Dealer</option>
+                                        <option value="Custodian">Custodian</option>
+                                        <option value="Self-Directed">Self-Directed</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-3 mt-6">
+                                <button
+                                    onClick={() => {
+                                        setShowNewManagerModal(false);
+                                        setNewManagerName('');
+                                        setNewManagerType('Advisor');
+                                    }}
+                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleCreateManager}
+                                    disabled={!newManagerName.trim()}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                    Create Manager
                                 </button>
                             </div>
                         </div>
