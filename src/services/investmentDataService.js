@@ -125,8 +125,13 @@ export const saveAccountInfo = async (accountInfo) => {
 };
 
 // 2. Save holdings (replaces existing for this account/date)
-export const saveHoldings = async (accountId, holdingsRows, asOfDate) => {
+// accountInfo is optional: { accountType, institution } for denormalized fields
+export const saveHoldings = async (accountId, holdingsRows, asOfDate, accountInfo = {}) => {
     try {
+        // Get current user for user_id
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
         // Delete existing holdings for this account and date
         await supabase
             .from('holdings')
@@ -134,22 +139,37 @@ export const saveHoldings = async (accountId, holdingsRows, asOfDate) => {
             .eq('account_id', accountId)
             .eq('as_of_date', asOfDate);
 
-        // Prepare holdings data with classification fields
-        const holdingsData = holdingsRows.map(row => ({
-            account_id: accountId,
-            symbol: row.Symbol || row.symbol || '',
-            security_name: row['Security Name'] || row.securityName || row.name || '',
-            asset_type: row.assetType || row.asset_type || null,
-            category: row.category || null,
-            sub_category: row.subCategory || row.sub_category || null,
-            units: parseFloat(row.Units || row.units || row['Units/Shares'] || 0),
-            price: parseFloat(row.Price || row.price || 0),
-            market_value: parseFloat(row['Market Value'] || row.marketValue || row['Market Val'] || row.value || 0),
-            book_value: parseFloat(row['Book Value'] || row.bookValue || row['Book Val'] || row.bookCost || 0) || null,
-            gain_loss: parseFloat(row['Gain/Loss'] || row.gainLoss || row['Gain Loss'] || 0) || null,
-            as_of_date: asOfDate,
-            currency: row.Currency || row.currency || 'CAD'
-        }));
+        // Prepare holdings data with all fields including new columns
+        const holdingsData = holdingsRows.map(row => {
+            const units = parseFloat(row.Units || row.units || row['Units/Shares'] || 0);
+            const bookValue = parseFloat(row['Book Value'] || row.bookValue || row['Book Val'] || row.bookCost || 0) || null;
+
+            return {
+                account_id: accountId,
+                user_id: user.id,  // NEW: Add user_id
+                symbol: row.Symbol || row.symbol || '',
+                security_name: row['Security Name'] || row.securityName || row.name || '',
+                asset_type: row.assetType || row.asset_type || null,
+                category: row.category || null,
+                sub_category: row.subCategory || row.sub_category || null,
+                units: units,
+                price: parseFloat(row.Price || row.price || 0),
+                market_value: parseFloat(row['Market Value'] || row.marketValue || row['Market Val'] || row.value || 0),
+                book_value: bookValue,
+                gain_loss: parseFloat(row['Gain/Loss'] || row.gainLoss || row['Gain Loss'] || 0) || null,
+                as_of_date: asOfDate,
+                currency: row.Currency || row.currency || 'CAD',
+                // NEW columns for classification and analysis
+                investment_type: row.investmentType || row.investment_type || null,  // ETF, Mutual Fund, Stock, Bond
+                sector: row.sector || null,  // Technology, Healthcare, Financial, etc.
+                geography: row.geography || null,  // US, Canada, International
+                exchange: row.exchange || null,  // TSX, NYSE, NASDAQ
+                average_cost_per_unit: (bookValue && units) ? (bookValue / units) : null,
+                // Denormalized from investment_accounts for faster queries
+                account_type: accountInfo.accountType || accountInfo.account_type || null,  // RRSP, TFSA, Non-Registered
+                institution: accountInfo.institution || null  // RBC, TD, etc.
+            };
+        });
 
         const { data, error } = await supabase
             .from('holdings')
@@ -158,7 +178,7 @@ export const saveHoldings = async (accountId, holdingsRows, asOfDate) => {
 
         if (error) throw error;
 
-        console.log(`✅ ${data.length} holdings saved`);
+        console.log(`✅ ${data.length} holdings saved with user_id and new classification fields`);
         return { success: true, count: data.length, holdings: data };
     } catch (error) {
         console.error('❌ Error saving holdings:', error);
@@ -320,7 +340,11 @@ export const saveCompleteExtraction = async (accountInfo, tables) => {
                     const holdingsResult = await saveHoldings(
                         accountId,
                         rows,
-                        accountInfo.statementDate || new Date().toISOString().split('T')[0]
+                        accountInfo.statementDate || new Date().toISOString().split('T')[0],
+                        {
+                            accountType: accountInfo.accountType || accountInfo.account_type,
+                            institution: accountInfo.institution
+                        }
                     );
                     results.holdings = holdingsResult;
                     if (!holdingsResult.success) {

@@ -1080,6 +1080,275 @@ class MerchantSplitRulesService extends SupabaseService {
     }
 }
 
+// =====================================================
+// NEW SERVICES FOR PHASE 2 (Ground Zero)
+// =====================================================
+
+/**
+ * User Profile Service - User demographics, retirement goals
+ */
+class UserProfileService extends SupabaseService {
+    constructor() {
+        super('user_profile', 'personal_finance');
+    }
+
+    /**
+     * Get user profile (single record per user)
+     */
+    async getProfile() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const { data, error } = await this.table()
+                .select('*')
+                .eq('user_id', user.id)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+            return data || null;
+        } catch (error) {
+            console.error('Error fetching user profile:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Upsert user profile
+     */
+    async upsertProfile(profileData) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const record = {
+                user_id: user.id,
+                ...this.toSnakeCase(profileData),
+                updated_at: new Date().toISOString()
+            };
+
+            const { data, error } = await this.table()
+                .upsert(record, { onConflict: 'user_id' })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error upserting user profile:', error);
+            throw error;
+        }
+    }
+}
+
+/**
+ * Government Benefits Service - CPP/OAS/Pension estimates
+ */
+class GovernmentBenefitsService extends SupabaseService {
+    constructor() {
+        super('government_benefits', 'personal_finance');
+    }
+
+    /**
+     * Get government benefits (single record per user)
+     */
+    async getBenefits() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const { data, error } = await this.table()
+                .select('*')
+                .eq('user_id', user.id)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error;
+            return data || null;
+        } catch (error) {
+            console.error('Error fetching government benefits:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Upsert government benefits
+     */
+    async upsertBenefits(benefitsData) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const record = {
+                user_id: user.id,
+                ...this.toSnakeCase(benefitsData),
+                last_updated: new Date().toISOString()
+            };
+
+            const { data, error } = await this.table()
+                .upsert(record, { onConflict: 'user_id' })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error upserting government benefits:', error);
+            throw error;
+        }
+    }
+}
+
+/**
+ * Holding Snapshots Service - Historical investment values
+ */
+class HoldingSnapshotsService extends SupabaseService {
+    constructor() {
+        super('holding_snapshots', 'personal_finance');
+    }
+
+    /**
+     * Save a snapshot (upserts based on account_id, symbol, snapshot_date)
+     */
+    async saveSnapshot(snapshotData) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const record = {
+                ...this.toSnakeCase(snapshotData),
+                user_id: user.id,
+                source: snapshotData.source || 'statement'
+            };
+
+            const { data, error } = await this.table()
+                .upsert(record, {
+                    onConflict: 'account_id,symbol,snapshot_date'
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error saving holding snapshot:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Bulk save snapshots
+     */
+    async bulkSaveSnapshots(snapshots) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const records = snapshots.map(s => ({
+                ...this.toSnakeCase(s),
+                user_id: user.id,
+                source: s.source || 'statement'
+            }));
+
+            const { data, error } = await this.table()
+                .upsert(records, {
+                    onConflict: 'account_id,symbol,snapshot_date'
+                })
+                .select();
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error bulk saving holding snapshots:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get snapshots for an account within date range
+     */
+    async getSnapshotsByAccount(accountId, startDate = null, endDate = null) {
+        try {
+            let query = this.table()
+                .select('*')
+                .eq('account_id', accountId)
+                .order('snapshot_date', { ascending: true });
+
+            if (startDate) query = query.gte('snapshot_date', startDate);
+            if (endDate) query = query.lte('snapshot_date', endDate);
+
+            const { data, error } = await query;
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching snapshots by account:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get portfolio growth over time (aggregated by date)
+     */
+    async getPortfolioGrowth(startDate = null, endDate = null) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            let query = this.table()
+                .select('snapshot_date, market_value, book_cost, unrealized_gain_loss')
+                .eq('user_id', user.id)
+                .order('snapshot_date', { ascending: true });
+
+            if (startDate) query = query.gte('snapshot_date', startDate);
+            if (endDate) query = query.lte('snapshot_date', endDate);
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            // Aggregate by date
+            const grouped = {};
+            for (const row of (data || [])) {
+                const date = row.snapshot_date;
+                if (!grouped[date]) {
+                    grouped[date] = {
+                        snapshot_date: date,
+                        total_market_value: 0,
+                        total_book_cost: 0,
+                        total_unrealized_gain_loss: 0
+                    };
+                }
+                grouped[date].total_market_value += parseFloat(row.market_value || 0);
+                grouped[date].total_book_cost += parseFloat(row.book_cost || 0);
+                grouped[date].total_unrealized_gain_loss += parseFloat(row.unrealized_gain_loss || 0);
+            }
+
+            return Object.values(grouped);
+        } catch (error) {
+            console.error('Error fetching portfolio growth:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get latest snapshot date for an account
+     */
+    async getLatestSnapshotDate(accountId) {
+        try {
+            const { data, error } = await this.table()
+                .select('snapshot_date')
+                .eq('account_id', accountId)
+                .order('snapshot_date', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (error && error.code !== 'PGRST116') throw error;
+            return data?.snapshot_date || null;
+        } catch (error) {
+            console.error('Error fetching latest snapshot date:', error);
+            return null;
+        }
+    }
+}
+
 // Export service instances
 export const supabaseAccountsDB = new SupabaseService('accounts');
 export const supabaseTransactionsDB = new TransactionService();
@@ -1096,6 +1365,11 @@ export const supabaseBeliefTagsDB = new BeliefTagsService();
 export const supabaseUserPreferencesDB = new UserPreferencesService();
 export const supabaseProductMetadataDB = new ProductMetadataService();
 export const supabaseProfilesDB = new SupabaseService('profiles');
+
+// NEW: Phase 2 services for retirement planning
+export const supabaseUserProfileDB = new UserProfileService();
+export const supabaseGovernmentBenefitsDB = new GovernmentBenefitsService();
+export const supabaseHoldingSnapshotsDB = new HoldingSnapshotsService();
 
 // Import staging services
 export const supabaseImportStagingDB = new ImportStagingService();
