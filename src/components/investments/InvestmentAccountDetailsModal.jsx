@@ -1,6 +1,6 @@
 // src/components/investments/InvestmentAccountDetailsModal.jsx
 import React, { useState, useEffect } from 'react';
-import { X, TrendingUp, Receipt, PieChart, Calendar, Filter, Download, ChevronDown, Building2 } from 'lucide-react';
+import { X, TrendingUp, Receipt, PieChart, Calendar, Filter, Download, ChevronDown, ChevronUp, Building2, Clock, Plus, Minus, DollarSign } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 
 const InvestmentAccountDetailsModal = ({ account, onClose }) => {
@@ -12,6 +12,7 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
     const [dateFilter, setDateFilter] = useState('all');
     const [customDateRange, setCustomDateRange] = useState({ from: '', to: '' });
     const [transactionTypeFilter, setTransactionTypeFilter] = useState('all');
+    const [expandedHolding, setExpandedHolding] = useState(null); // Track which holding timeline is expanded
 
     useEffect(() => {
         loadAccountData();
@@ -113,6 +114,31 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
         .filter(t => t.transaction_type === 'Fee')
         .reduce((sum, t) => sum + (parseFloat(t.debit) || 0), 0);
 
+    // Get timeline for a specific holding (all transactions for that symbol)
+    const getHoldingTimeline = (symbol) => {
+        return transactions
+            .filter(t => t.symbol === symbol)
+            .sort((a, b) => new Date(a.transaction_date) - new Date(b.transaction_date));
+    };
+
+    // Get first purchase date for a holding
+    const getFirstPurchaseDate = (symbol) => {
+        const timeline = getHoldingTimeline(symbol);
+        const firstBuy = timeline.find(t =>
+            t.transaction_type?.toLowerCase().includes('buy') ||
+            t.transaction_type?.toLowerCase().includes('purchase')
+        );
+        return firstBuy?.transaction_date;
+    };
+
+    // Calculate total invested for a holding
+    const getTotalInvested = (symbol) => {
+        const timeline = getHoldingTimeline(symbol);
+        return timeline
+            .filter(t => t.transaction_type?.toLowerCase().includes('buy') || t.transaction_type?.toLowerCase().includes('purchase'))
+            .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount) || 0), 0);
+    };
+
     const tabs = [
         { id: 'holdings', label: 'Holdings', icon: PieChart, count: latestHoldings.length },
         { id: 'transactions', label: 'Transactions', icon: TrendingUp, count: transactions.length },
@@ -188,8 +214,8 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-colors ${activeTab === tab.id
-                                            ? 'border-indigo-600 text-indigo-600 bg-white'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                                        ? 'border-indigo-600 text-indigo-600 bg-white'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700'
                                         }`}
                                 >
                                     <Icon className="w-4 h-4" />
@@ -238,6 +264,7 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                         <table className="w-full text-sm">
                                             <thead className="bg-gray-50">
                                                 <tr>
+                                                    <th className="px-4 py-3 text-left font-medium text-gray-700 w-8"></th>
                                                     <th className="px-4 py-3 text-left font-medium text-gray-700">Security</th>
                                                     <th className="px-4 py-3 text-left font-medium text-gray-700">Asset Type</th>
                                                     <th className="px-4 py-3 text-right font-medium text-gray-700">Units</th>
@@ -250,25 +277,155 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                             <tbody className="divide-y">
                                                 {filteredHoldings.map((holding, idx) => {
                                                     const gainLoss = (parseFloat(holding.market_value) || 0) - (parseFloat(holding.book_value) || 0);
+                                                    const timeline = getHoldingTimeline(holding.symbol);
+                                                    const firstPurchase = getFirstPurchaseDate(holding.symbol);
+                                                    const isExpanded = expandedHolding === holding.symbol;
+
                                                     return (
-                                                        <tr key={holding.id || idx} className="hover:bg-gray-50">
-                                                            <td className="px-4 py-3">
-                                                                <div className="font-medium text-gray-900">{holding.symbol}</div>
-                                                                <div className="text-xs text-gray-500">{holding.security_name}</div>
-                                                            </td>
-                                                            <td className="px-4 py-3">
-                                                                <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
-                                                                    {holding.asset_type || '-'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-4 py-3 text-right">{parseFloat(holding.units || 0).toFixed(4)}</td>
-                                                            <td className="px-4 py-3 text-right">{formatCurrency(holding.price)}</td>
-                                                            <td className="px-4 py-3 text-right font-medium">{formatCurrency(holding.market_value)}</td>
-                                                            <td className="px-4 py-3 text-right">{formatCurrency(holding.book_value)}</td>
-                                                            <td className={`px-4 py-3 text-right font-medium ${gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                                {formatCurrency(gainLoss)}
-                                                            </td>
-                                                        </tr>
+                                                        <React.Fragment key={holding.id || idx}>
+                                                            {/* Main Holding Row */}
+                                                            <tr
+                                                                className={`hover:bg-gray-50 cursor-pointer ${isExpanded ? 'bg-indigo-50' : ''}`}
+                                                                onClick={() => setExpandedHolding(isExpanded ? null : holding.symbol)}
+                                                            >
+                                                                <td className="px-4 py-3">
+                                                                    {timeline.length > 0 && (
+                                                                        <button className="text-gray-400 hover:text-indigo-600">
+                                                                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                                        </button>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-4 py-3">
+                                                                    <div className="font-medium text-gray-900">{holding.symbol}</div>
+                                                                    <div className="text-xs text-gray-500">{holding.security_name}</div>
+                                                                    {firstPurchase && (
+                                                                        <div className="flex items-center gap-1 text-xs text-indigo-600 mt-1">
+                                                                            <Clock className="w-3 h-3" />
+                                                                            Since {formatDate(firstPurchase)}
+                                                                        </div>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-4 py-3">
+                                                                    <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                                                                        {holding.asset_type || '-'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-right">{parseFloat(holding.units || 0).toFixed(4)}</td>
+                                                                <td className="px-4 py-3 text-right">{formatCurrency(holding.price)}</td>
+                                                                <td className="px-4 py-3 text-right font-medium">{formatCurrency(holding.market_value)}</td>
+                                                                <td className="px-4 py-3 text-right">{formatCurrency(holding.book_value)}</td>
+                                                                <td className={`px-4 py-3 text-right font-medium ${gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                    {formatCurrency(gainLoss)}
+                                                                </td>
+                                                            </tr>
+
+                                                            {/* Expanded Timeline Row */}
+                                                            {isExpanded && timeline.length > 0 && (
+                                                                <tr>
+                                                                    <td colSpan="8" className="px-4 py-4 bg-gradient-to-r from-indigo-50 to-purple-50">
+                                                                        <div className="ml-8">
+                                                                            <div className="flex items-center gap-2 mb-3">
+                                                                                <Clock className="w-4 h-4 text-indigo-600" />
+                                                                                <h4 className="font-semibold text-gray-800">Investment Timeline</h4>
+                                                                                <span className="text-xs text-gray-500">({timeline.length} transactions)</span>
+                                                                            </div>
+
+                                                                            {/* Timeline */}
+                                                                            <div className="relative pl-4 border-l-2 border-indigo-200 space-y-3">
+                                                                                {timeline.map((txn, txnIdx) => {
+                                                                                    const isBuy = txn.transaction_type?.toLowerCase().includes('buy') ||
+                                                                                        txn.transaction_type?.toLowerCase().includes('purchase');
+                                                                                    const isSell = txn.transaction_type?.toLowerCase().includes('sell');
+                                                                                    const isDividend = txn.transaction_type?.toLowerCase().includes('dividend') ||
+                                                                                        txn.transaction_type?.toLowerCase().includes('distribution');
+
+                                                                                    return (
+                                                                                        <div key={txn.id || txnIdx} className="relative">
+                                                                                            {/* Timeline dot */}
+                                                                                            <div className={`absolute -left-[21px] w-4 h-4 rounded-full border-2 border-white ${isBuy ? 'bg-green-500' :
+                                                                                                    isSell ? 'bg-red-500' :
+                                                                                                        isDividend ? 'bg-purple-500' :
+                                                                                                            'bg-gray-400'
+                                                                                                }`}>
+                                                                                                {isBuy && <Plus className="w-2.5 h-2.5 text-white absolute top-0.5 left-0.5" />}
+                                                                                                {isSell && <Minus className="w-2.5 h-2.5 text-white absolute top-0.5 left-0.5" />}
+                                                                                                {isDividend && <DollarSign className="w-2.5 h-2.5 text-white absolute top-0.5 left-0.5" />}
+                                                                                            </div>
+
+                                                                                            {/* Timeline content */}
+                                                                                            <div className="bg-white rounded-lg p-3 shadow-sm border ml-2">
+                                                                                                <div className="flex items-center justify-between">
+                                                                                                    <div className="flex items-center gap-3">
+                                                                                                        <span className="text-xs text-gray-500 w-24">
+                                                                                                            {formatDate(txn.transaction_date)}
+                                                                                                        </span>
+                                                                                                        <span className={`px-2 py-0.5 text-xs rounded font-medium ${isBuy ? 'bg-green-100 text-green-800' :
+                                                                                                                isSell ? 'bg-red-100 text-red-800' :
+                                                                                                                    isDividend ? 'bg-purple-100 text-purple-800' :
+                                                                                                                        'bg-gray-100 text-gray-800'
+                                                                                                            }`}>
+                                                                                                            {txn.transaction_type}
+                                                                                                        </span>
+                                                                                                        {txn.units && (
+                                                                                                            <span className="text-sm text-gray-600">
+                                                                                                                {parseFloat(txn.units).toFixed(4)} units
+                                                                                                            </span>
+                                                                                                        )}
+                                                                                                        {txn.price && (
+                                                                                                            <span className="text-sm text-gray-500">
+                                                                                                                @ {formatCurrency(txn.price)}
+                                                                                                            </span>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                    <span className={`font-semibold ${parseFloat(txn.amount) >= 0 ? 'text-green-600' : 'text-red-600'
+                                                                                                        }`}>
+                                                                                                        {formatCurrency(Math.abs(txn.amount))}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                                {txn.description && (
+                                                                                                    <div className="text-xs text-gray-500 mt-1 ml-24">
+                                                                                                        {txn.description}
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+
+                                                                            {/* Summary */}
+                                                                            <div className="mt-4 pt-3 border-t border-indigo-200 flex items-center gap-6 text-sm">
+                                                                                <div>
+                                                                                    <span className="text-gray-500">Total Invested:</span>
+                                                                                    <span className="ml-2 font-semibold text-gray-800">{formatCurrency(getTotalInvested(holding.symbol))}</span>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <span className="text-gray-500">Current Value:</span>
+                                                                                    <span className="ml-2 font-semibold text-gray-800">{formatCurrency(holding.market_value)}</span>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <span className="text-gray-500">Return:</span>
+                                                                                    <span className={`ml-2 font-semibold ${gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                                        {formatCurrency(gainLoss)} ({((gainLoss / (parseFloat(holding.book_value) || 1)) * 100).toFixed(2)}%)
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+
+                                                            {/* No timeline message */}
+                                                            {isExpanded && timeline.length === 0 && (
+                                                                <tr>
+                                                                    <td colSpan="8" className="px-4 py-4 bg-gray-50">
+                                                                        <div className="ml-8 text-gray-500 text-sm italic">
+                                                                            No transaction history available for this holding
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </React.Fragment>
                                                     );
                                                 })}
                                             </tbody>
@@ -317,9 +474,9 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                                         <td className="px-4 py-3">{formatDate(txn.transaction_date)}</td>
                                                         <td className="px-4 py-3">
                                                             <span className={`px-2 py-1 text-xs rounded ${txn.transaction_type?.includes('Buy') ? 'bg-green-100 text-green-800' :
-                                                                    txn.transaction_type?.includes('Sell') ? 'bg-red-100 text-red-800' :
-                                                                        txn.transaction_type?.includes('Dividend') ? 'bg-purple-100 text-purple-800' :
-                                                                            'bg-gray-100 text-gray-800'
+                                                                txn.transaction_type?.includes('Sell') ? 'bg-red-100 text-red-800' :
+                                                                    txn.transaction_type?.includes('Dividend') ? 'bg-purple-100 text-purple-800' :
+                                                                        'bg-gray-100 text-gray-800'
                                                                 }`}>
                                                                 {txn.transaction_type}
                                                             </span>
@@ -388,9 +545,9 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                                             <td className="px-4 py-3">{txn.description}</td>
                                                             <td className="px-4 py-3">
                                                                 <span className={`px-2 py-1 text-xs rounded ${txn.transaction_type === 'Fee' ? 'bg-orange-100 text-orange-800' :
-                                                                        txn.transaction_type === 'Deposit' ? 'bg-green-100 text-green-800' :
-                                                                            txn.transaction_type === 'Withdrawal' ? 'bg-red-100 text-red-800' :
-                                                                                'bg-gray-100 text-gray-800'
+                                                                    txn.transaction_type === 'Deposit' ? 'bg-green-100 text-green-800' :
+                                                                        txn.transaction_type === 'Withdrawal' ? 'bg-red-100 text-red-800' :
+                                                                            'bg-gray-100 text-gray-800'
                                                                     }`}>
                                                                     {txn.transaction_type}
                                                                 </span>
