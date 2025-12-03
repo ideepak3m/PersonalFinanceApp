@@ -791,6 +791,12 @@ export const UncategorizedReceipts = () => {
                                                 setShowMerchantDropdown({ ...showMerchantDropdown, [txn.id]: true });
                                             }}
                                             onFocus={() => setShowMerchantDropdown({ ...showMerchantDropdown, [txn.id]: true })}
+                                            onBlur={() => {
+                                                // Delay to allow clicking on dropdown items
+                                                setTimeout(() => {
+                                                    setShowMerchantDropdown(prev => ({ ...prev, [txn.id]: false }));
+                                                }, 200);
+                                            }}
                                             placeholder="Search or add merchant..."
                                             className={`border rounded px-2 py-1 text-sm w-full ${txn.normalized_merchant_id
                                                 ? 'bg-green-50 border-green-300'
