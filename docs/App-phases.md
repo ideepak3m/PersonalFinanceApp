@@ -216,21 +216,51 @@ Consolidate all expenses, income, and investments in one place with categorized 
 
 ---
 
-## Phase 3: Data Import & Forms
+## Phase 3: Data Import & Forms ✅ (In Progress)
 
 ### 3a. Import Capabilities
 - [x] PDF Investment Statements (RBC, etc.)
-- [ ] Bank Statement CSV
-- [ ] Credit Card CSV
+- [x] Bank Statement CSV (with column mapper)
+- [x] Credit Card CSV  
 - [ ] CPP Statement of Contributions PDF
-- [ ] Manual Entry Forms
+- [x] Manual Entry Forms (TransactionForm.jsx)
 
-### 3b. Forms Needed
-- [ ] Add/Edit Transaction
-- [ ] Add/Edit Account
-- [ ] User Profile Setup
-- [ ] CPP/OAS Benefits Entry
+### 3b. Forms Built
+- [x] Add/Edit Transaction (TransactionForm.jsx)
+- [x] Add/Edit Account (AccountForm.jsx - existing)
+- [x] User Profile Setup (UserProfileSettings.jsx)
+- [x] CPP/OAS Benefits Entry (RetirementInfoSettings.jsx)
 - [ ] Retirement Scenario Builder
+
+### 3c. Reports Built
+- [x] Expense Analysis (ExpenseAnalysis.jsx)
+  - Monthly breakdown bar chart
+  - Category breakdown with percentages
+  - Top merchants
+  - Year/month filtering
+- [x] Income Analysis (IncomeAnalysis.jsx)
+  - Income by source
+  - Monthly trends
+  - Income type classification
+- [x] Investment Growth (InvestmentGrowth.jsx)
+  - Portfolio allocation by account type
+  - Asset type breakdown
+  - Institution breakdown
+  - Top holdings table
+
+### 3d. Components Location
+```
+src/components/
+├── settings/
+│   ├── UserProfileSettings.jsx    ← User profile form (DOB, province, income, retirement)
+│   └── RetirementInfoSettings.jsx ← CPP/OAS/pension entry form
+├── reports/
+│   ├── ExpenseAnalysis.jsx        ← Monthly expense breakdown
+│   ├── IncomeAnalysis.jsx         ← Income trends by source
+│   └── InvestmentGrowth.jsx       ← Portfolio growth & allocation
+└── transactions/
+    └── TransactionForm.jsx        ← Add/edit transactions manually
+```
 
 ---
 
@@ -327,9 +357,15 @@ CREATE TABLE personal_finance.insurance_policies (
 ## Progress Tracking
 
 - [x] Phase 1: Database analysis complete
-- [ ] Phase 1: Run migrations
-- [ ] Phase 2a: Fix navigation flow
-- [ ] Phase 2b: Build dashboard
-- [ ] Phase 3: Import/forms
+- [x] Phase 1: Run migrations (user_profile, government_benefits, holding_snapshots tables created)
+- [x] Phase 2a: Fix navigation flow (Sidebar updated)
+- [x] Phase 2b: Build dashboard (existing)
+- [x] Phase 2c: Investment timeline feature added
+- [x] Phase 3a: User Profile Settings form
+- [x] Phase 3b: Retirement Info/CPP-OAS form
+- [x] Phase 3c: Expense Analysis report
+- [x] Phase 3d: Income Analysis report
+- [x] Phase 3e: Investment Growth report
+- [x] Phase 3f: Transaction Form (manual entry)
 - [ ] Phase 4: AI integration
 - [ ] Phase 5: India support

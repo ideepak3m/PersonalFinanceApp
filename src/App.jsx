@@ -22,18 +22,14 @@ import SubscriptionManager from './components/SubscriptionManager';
 import MerchantSplitRules from './components/MerchantSplitRules';
 import PDFTableReader from './pdfTableReader/tableReader';
 
-// Placeholder component for pages not yet built
-const PlaceholderPage = ({ title, description }) => (
-  <div className="flex items-center justify-center h-full">
-    <div className="text-center p-8 bg-gray-800 rounded-lg border border-gray-700 max-w-md">
-      <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-        <span className="text-3xl">🚧</span>
-      </div>
-      <h2 className="text-2xl font-bold text-white mb-2">{title}</h2>
-      <p className="text-gray-400">{description || 'This page is coming soon!'}</p>
-    </div>
-  </div>
-);
+// Phase 3 Components - Settings
+import { UserProfileSettings } from './components/settings/UserProfileSettings';
+import { RetirementInfoSettings } from './components/settings/RetirementInfoSettings';
+
+// Phase 3 Components - Reports
+import { ExpenseAnalysis } from './components/reports/ExpenseAnalysis';
+import { IncomeAnalysis } from './components/reports/IncomeAnalysis';
+import { InvestmentGrowth } from './components/reports/InvestmentGrowth';
 
 function App() {
   return (
@@ -71,24 +67,9 @@ function App() {
                           <Route path="pdf-reader" element={<PDFTableReader />} />
 
                           {/* Reports */}
-                          <Route path="reports/expenses" element={
-                            <PlaceholderPage
-                              title="Expense Analysis"
-                              description="Monthly breakdown, category charts, year-over-year comparison"
-                            />
-                          } />
-                          <Route path="reports/income" element={
-                            <PlaceholderPage
-                              title="Income Analysis"
-                              description="Income trends and sources over time"
-                            />
-                          } />
-                          <Route path="reports/investments" element={
-                            <PlaceholderPage
-                              title="Investment Growth"
-                              description="Portfolio growth charts by account and time period"
-                            />
-                          } />
+                          <Route path="reports/expenses" element={<ExpenseAnalysis />} />
+                          <Route path="reports/income" element={<IncomeAnalysis />} />
+                          <Route path="reports/investments" element={<InvestmentGrowth />} />
                           <Route path="analytics" element={<Analytics />} />
 
                           {/* AI Chat */}
@@ -96,18 +77,8 @@ function App() {
 
                           {/* Settings */}
                           <Route path="settings" element={<Settings />} />
-                          <Route path="settings/profile" element={
-                            <PlaceholderPage
-                              title="User Profile"
-                              description="Date of birth, province, employment info, tax details"
-                            />
-                          } />
-                          <Route path="settings/retirement" element={
-                            <PlaceholderPage
-                              title="Retirement Info"
-                              description="CPP/OAS estimates, pension details, retirement goals"
-                            />
-                          } />
+                          <Route path="settings/profile" element={<UserProfileSettings />} />
+                          <Route path="settings/retirement" element={<RetirementInfoSettings />} />
                           <Route path="subscriptions" element={<SubscriptionManager />} />
                           <Route path="split-rules" element={<MerchantSplitRules />} />
 

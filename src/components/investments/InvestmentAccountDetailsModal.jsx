@@ -114,28 +114,145 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
         .filter(t => t.transaction_type === 'Fee')
         .reduce((sum, t) => sum + (parseFloat(t.debit) || 0), 0);
 
-    // Get timeline for a specific holding (all transactions for that symbol)
-    const getHoldingTimeline = (symbol) => {
-        return transactions
-            .filter(t => t.symbol === symbol)
-            .sort((a, b) => new Date(a.transaction_date) - new Date(b.transaction_date));
+    // Helper to normalize text for matching (lowercase, remove extra spaces)
+    const normalizeText = (text) => {
+        if (!text) return '';
+        return text.toLowerCase().trim().replace(/\s+/g, ' ');
+    };
+
+    // Extract security name from transaction description
+    // e.g., "Security Purchase: SKYLINE COMMERCIAL REAL ESTATE..." -> "skyline commercial real estate..."
+    const extractSecurityFromDescription = (description) => {
+        if (!description) return '';
+        const desc = description.toLowerCase();
+
+        // Common patterns in transaction descriptions
+        const patterns = [
+            /security purchase:\s*(.+)/i,
+            /security sale:\s*(.+)/i,
+            /buy:\s*(.+)/i,
+            /sell:\s*(.+)/i,
+            /purchase:\s*(.+)/i,
+            /distribution:\s*(.+)/i,
+            /dividend:\s*(.+)/i,
+            /reinvestment:\s*(.+)/i,
+        ];
+
+        for (const pattern of patterns) {
+            const match = description.match(pattern);
+            if (match && match[1]) {
+                // Clean up the extracted name - remove "TRUST UNITS", "CLASS A", etc. at the end
+                let name = match[1].trim();
+                name = name.replace(/\s+(trust units?|class [a-z]|units?)$/i, '');
+                return normalizeText(name);
+            }
+        }
+
+        return normalizeText(description);
+    };
+
+    // Check if two security names match (fuzzy matching)
+    const securityNamesMatch = (txnText, holdingSecurityName) => {
+        if (!txnText || !holdingSecurityName) return false;
+
+        // Normalize the holding security name
+        const holdingName = normalizeText(holdingSecurityName);
+
+        // Try to extract security name from transaction text (could be description or security_name)
+        const txnName = extractSecurityFromDescription(txnText);
+
+        // Also try direct normalization
+        const txnNameDirect = normalizeText(txnText);
+
+        // Exact match
+        if (holdingName === txnName || holdingName === txnNameDirect) return true;
+
+        // One contains the other
+        if (holdingName.includes(txnName) || txnName.includes(holdingName)) return true;
+        if (holdingName.includes(txnNameDirect) || txnNameDirect.includes(holdingName)) return true;
+
+        // Key word matching - check if the main identifying words match
+        // e.g., "skyline industrial" should match "SKYLINE INDUSTRIAL REIT CLASS A TRUST UNITS"
+        const holdingWords = holdingName.split(' ').filter(w => w.length > 2);
+        const txnWords = txnName.split(' ').filter(w => w.length > 2);
+
+        // If the first 2 significant words match, it's likely the same security
+        if (holdingWords.length >= 2 && txnWords.length >= 2) {
+            if (holdingWords[0] === txnWords[0] && holdingWords[1] === txnWords[1]) {
+                return true;
+            }
+        }
+
+        // Single word match for short names (e.g., "Centurion")
+        if (holdingWords[0] && txnWords[0] && holdingWords[0].length > 5) {
+            if (holdingWords[0] === txnWords[0]) return true;
+        }
+
+        return false;
+    };
+
+    // Get timeline for a specific holding (match by symbol OR security_name OR description)
+    const getHoldingTimeline = (holding) => {
+        const symbol = holding.symbol;
+        const securityName = holding.security_name;
+
+        const matched = transactions.filter(t => {
+            // Match by symbol if both have it
+            if (t.symbol && symbol && normalizeText(t.symbol) === normalizeText(symbol)) {
+                return true;
+            }
+            // Match by security_name field
+            if (t.security_name && securityNamesMatch(t.security_name, securityName)) {
+                return true;
+            }
+            // Match by description field (e.g., "Security Purchase: SKYLINE...")
+            if (t.description && securityNamesMatch(t.description, securityName)) {
+                return true;
+            }
+            // Try extracting security from description and match
+            if (t.description) {
+                const extracted = extractSecurityFromDescription(t.description);
+                if (extracted && securityNamesMatch(extracted, securityName)) {
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        // Debug: log matching for first few holdings
+        if (matched.length === 0 && transactions.length > 0) {
+            console.log(`[Timeline Debug] No matches for "${securityName}" (symbol: ${symbol})`);
+            console.log(`  Sample transactions:`, transactions.slice(0, 3).map(t => ({
+                type: t.transaction_type,
+                symbol: t.symbol,
+                security_name: t.security_name,
+                description: t.description?.substring(0, 80)
+            })));
+        }
+
+        return matched.sort((a, b) => new Date(a.transaction_date) - new Date(b.transaction_date));
     };
 
     // Get first purchase date for a holding
-    const getFirstPurchaseDate = (symbol) => {
-        const timeline = getHoldingTimeline(symbol);
+    const getFirstPurchaseDate = (holding) => {
+        const timeline = getHoldingTimeline(holding);
         const firstBuy = timeline.find(t =>
             t.transaction_type?.toLowerCase().includes('buy') ||
-            t.transaction_type?.toLowerCase().includes('purchase')
+            t.transaction_type?.toLowerCase().includes('purchase') ||
+            t.transaction_type?.toLowerCase().includes('contribution')
         );
         return firstBuy?.transaction_date;
     };
 
     // Calculate total invested for a holding
-    const getTotalInvested = (symbol) => {
-        const timeline = getHoldingTimeline(symbol);
+    const getTotalInvested = (holding) => {
+        const timeline = getHoldingTimeline(holding);
         return timeline
-            .filter(t => t.transaction_type?.toLowerCase().includes('buy') || t.transaction_type?.toLowerCase().includes('purchase'))
+            .filter(t =>
+                t.transaction_type?.toLowerCase().includes('buy') ||
+                t.transaction_type?.toLowerCase().includes('purchase') ||
+                t.transaction_type?.toLowerCase().includes('contribution')
+            )
             .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount) || 0), 0);
     };
 
@@ -277,22 +394,24 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                             <tbody className="divide-y">
                                                 {filteredHoldings.map((holding, idx) => {
                                                     const gainLoss = (parseFloat(holding.market_value) || 0) - (parseFloat(holding.book_value) || 0);
-                                                    const timeline = getHoldingTimeline(holding.symbol);
-                                                    const firstPurchase = getFirstPurchaseDate(holding.symbol);
-                                                    const isExpanded = expandedHolding === holding.symbol;
+                                                    const timeline = getHoldingTimeline(holding);
+                                                    const firstPurchase = getFirstPurchaseDate(holding);
+                                                    const isExpanded = expandedHolding === (holding.id || holding.symbol);
 
                                                     return (
                                                         <React.Fragment key={holding.id || idx}>
                                                             {/* Main Holding Row */}
                                                             <tr
                                                                 className={`hover:bg-gray-50 cursor-pointer ${isExpanded ? 'bg-indigo-50' : ''}`}
-                                                                onClick={() => setExpandedHolding(isExpanded ? null : holding.symbol)}
+                                                                onClick={() => setExpandedHolding(isExpanded ? null : (holding.id || holding.symbol))}
                                                             >
                                                                 <td className="px-4 py-3">
-                                                                    {timeline.length > 0 && (
+                                                                    {timeline.length > 0 ? (
                                                                         <button className="text-gray-400 hover:text-indigo-600">
                                                                             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                                                         </button>
+                                                                    ) : (
+                                                                        <span className="text-gray-300 text-xs">-</span>
                                                                     )}
                                                                 </td>
                                                                 <td className="px-4 py-3">
@@ -302,6 +421,11 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                                                         <div className="flex items-center gap-1 text-xs text-indigo-600 mt-1">
                                                                             <Clock className="w-3 h-3" />
                                                                             Since {formatDate(firstPurchase)}
+                                                                        </div>
+                                                                    )}
+                                                                    {!firstPurchase && timeline.length === 0 && (
+                                                                        <div className="text-xs text-gray-400 mt-1 italic">
+                                                                            No transaction history
                                                                         </div>
                                                                     )}
                                                                 </td>
@@ -343,9 +467,9 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                                                                         <div key={txn.id || txnIdx} className="relative">
                                                                                             {/* Timeline dot */}
                                                                                             <div className={`absolute -left-[21px] w-4 h-4 rounded-full border-2 border-white ${isBuy ? 'bg-green-500' :
-                                                                                                    isSell ? 'bg-red-500' :
-                                                                                                        isDividend ? 'bg-purple-500' :
-                                                                                                            'bg-gray-400'
+                                                                                                isSell ? 'bg-red-500' :
+                                                                                                    isDividend ? 'bg-purple-500' :
+                                                                                                        'bg-gray-400'
                                                                                                 }`}>
                                                                                                 {isBuy && <Plus className="w-2.5 h-2.5 text-white absolute top-0.5 left-0.5" />}
                                                                                                 {isSell && <Minus className="w-2.5 h-2.5 text-white absolute top-0.5 left-0.5" />}
@@ -360,9 +484,9 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                                                                                             {formatDate(txn.transaction_date)}
                                                                                                         </span>
                                                                                                         <span className={`px-2 py-0.5 text-xs rounded font-medium ${isBuy ? 'bg-green-100 text-green-800' :
-                                                                                                                isSell ? 'bg-red-100 text-red-800' :
-                                                                                                                    isDividend ? 'bg-purple-100 text-purple-800' :
-                                                                                                                        'bg-gray-100 text-gray-800'
+                                                                                                            isSell ? 'bg-red-100 text-red-800' :
+                                                                                                                isDividend ? 'bg-purple-100 text-purple-800' :
+                                                                                                                    'bg-gray-100 text-gray-800'
                                                                                                             }`}>
                                                                                                             {txn.transaction_type}
                                                                                                         </span>
@@ -397,7 +521,7 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                                                             <div className="mt-4 pt-3 border-t border-indigo-200 flex items-center gap-6 text-sm">
                                                                                 <div>
                                                                                     <span className="text-gray-500">Total Invested:</span>
-                                                                                    <span className="ml-2 font-semibold text-gray-800">{formatCurrency(getTotalInvested(holding.symbol))}</span>
+                                                                                    <span className="ml-2 font-semibold text-gray-800">{formatCurrency(getTotalInvested(holding))}</span>
                                                                                 </div>
                                                                                 <div>
                                                                                     <span className="text-gray-500">Current Value:</span>
