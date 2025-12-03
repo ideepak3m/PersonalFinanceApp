@@ -1,7 +1,7 @@
 // src/components/transactions/UncategorizedReceipts.jsx
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Search, ChevronLeft } from 'lucide-react';
+import { Search, ChevronLeft, Loader2 } from 'lucide-react';
 import { TransactionUpload } from './TransactionUpload';
 import { EditCoAModal } from './EditCoAModal';
 import { ImprovedSplitModal } from './ImprovedSplitModal';
@@ -39,6 +39,10 @@ export const UncategorizedReceipts = () => {
     // Modals
     const [editModalTxn, setEditModalTxn] = useState(null);
     const [splitModalTxn, setSplitModalTxn] = useState(null);
+
+    // Bulk update progress
+    const [bulkUpdating, setBulkUpdating] = useState(false);
+    const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0, status: '' });
 
     useEffect(() => {
         loadData();
@@ -286,14 +290,26 @@ export const UncategorizedReceipts = () => {
         setSelectedAll(newSelected.size === transactions.length);
     };
 
+    // Helper to check if user manually selected a COA (not Suspense)
+    const hasManualCoaSelection = (t) => {
+        if (!t.chart_of_account_id) return false;
+        const coa = chartOfAccounts.find(c => c.id === t.chart_of_account_id);
+        // If COA is Suspense, it's not a manual selection
+        if (coa?.name?.toLowerCase() === 'suspense') return false;
+        return true;
+    };
+
     const handleSelectAll = () => {
         if (selectedAll) {
             setSelectedTxns(new Set());
         } else {
-            // Only select transactions that are valid for bulk update (not Suspense)
+            // Only select transactions that are valid for bulk update
             const validTransactions = transactions.filter(t => {
                 // Include split transactions
                 if (t.splitReady) return true;
+
+                // Include transactions where user manually selected a COA
+                if (hasManualCoaSelection(t)) return true;
 
                 // Include transactions with default split rule available
                 if (t.defaultSplitRule && t.defaultSplitRule.splits?.length > 0) return true;
@@ -302,15 +318,6 @@ export const UncategorizedReceipts = () => {
                 if (t.suggestion?.type === 'coa') {
                     const coaId = t.suggestion.chartOfAccountId;
                     const coa = chartOfAccounts.find(c => c.id === coaId);
-                    // Exclude if COA is Suspense
-                    if (coa?.name?.toLowerCase() === 'suspense') return false;
-                    return true;
-                }
-
-                // Include transactions that already have a chart_of_account_id set (and not Suspense)
-                if (t.chart_of_account_id) {
-                    const coa = chartOfAccounts.find(c => c.id === t.chart_of_account_id);
-                    // Exclude if COA is Suspense
                     if (coa?.name?.toLowerCase() === 'suspense') return false;
                     return true;
                 }
@@ -332,21 +339,16 @@ export const UncategorizedReceipts = () => {
                 // Include split transactions that are manually ready
                 if (t.splitReady) return true;
 
-                // Include transactions with default split rule available
+                // Include transactions where user manually selected a COA (takes precedence over default split)
+                if (hasManualCoaSelection(t)) return true;
+
+                // Include transactions with default split rule available (only if no manual COA selected)
                 if (t.defaultSplitRule && t.defaultSplitRule.splits?.length > 0) return true;
 
                 // Include transactions with COA suggestions that are NOT Suspense
                 if (t.suggestion?.type === 'coa') {
                     const coaId = t.suggestion.chartOfAccountId;
                     const coa = chartOfAccounts.find(c => c.id === coaId);
-                    // Exclude if COA is Suspense
-                    if (coa?.name?.toLowerCase() === 'suspense') return false;
-                    return true;
-                }
-
-                // Include transactions that already have a chart_of_account_id set (and not Suspense)
-                if (t.chart_of_account_id) {
-                    const coa = chartOfAccounts.find(c => c.id === t.chart_of_account_id);
                     // Exclude if COA is Suspense
                     if (coa?.name?.toLowerCase() === 'suspense') return false;
                     return true;
@@ -361,30 +363,48 @@ export const UncategorizedReceipts = () => {
             }
 
             // Count transactions by type for confirmation message
+            // Manual COA selection takes precedence over default split
             const splitReadyCount = validTransactions.filter(t => t.splitReady).length;
-            const defaultSplitCount = validTransactions.filter(t => !t.splitReady && t.defaultSplitRule).length;
-            const coaCount = validTransactions.length - splitReadyCount - defaultSplitCount;
+            const manualCoaCount = validTransactions.filter(t => !t.splitReady && hasManualCoaSelection(t)).length;
+            const defaultSplitCount = validTransactions.filter(t => !t.splitReady && !hasManualCoaSelection(t) && t.defaultSplitRule).length;
+            const suggestedCoaCount = validTransactions.length - splitReadyCount - manualCoaCount - defaultSplitCount;
 
             // Show confirmation with detailed count
             const confirmMsg = `Ready to categorize ${validTransactions.length} transaction(s):\n` +
                 `• ${splitReadyCount} manually split\n` +
+                `• ${manualCoaCount} with manually selected COA\n` +
                 `• ${defaultSplitCount} using default split rules\n` +
-                `• ${coaCount} with suggested COA\n\nContinue?`;
+                `• ${suggestedCoaCount} with suggested COA\n\nContinue?`;
             const confirm = window.confirm(confirmMsg);
             if (!confirm) return;
+
+            // Show progress modal
+            setBulkUpdating(true);
+            setBulkProgress({ current: 0, total: validTransactions.length, status: 'Starting...' });
 
             const successCount = { updated: 0, failed: 0 };
 
             // Process each transaction
-            for (const txn of validTransactions) {
+            for (let i = 0; i < validTransactions.length; i++) {
+                const txn = validTransactions[i];
+                setBulkProgress({
+                    current: i + 1,
+                    total: validTransactions.length,
+                    status: `Processing: ${txn.description?.substring(0, 30) || 'Transaction'}...`
+                });
+
                 try {
+                    // Check if user manually selected a COA - this takes precedence over default split
+                    const userSelectedCoa = hasManualCoaSelection(txn);
+
                     // Determine if this transaction should be split
-                    const shouldSplit = txn.splitReady || (txn.defaultSplitRule && txn.defaultSplitRule.splits?.length > 0);
-                    
-                    // Get splits: either from manual split or from default rule
-                    const splitsToUse = txn.splitReady 
-                        ? txn.splits 
-                        : (txn.defaultSplitRule?.splits || []).map(s => ({
+                    // Only use default split if: manually split ready OR (has default split AND user hasn't manually selected a COA)
+                    const shouldSplit = txn.splitReady || (!userSelectedCoa && txn.defaultSplitRule && txn.defaultSplitRule.splits?.length > 0);
+
+                    // Get splits: either from manual split or from default rule (only if not using manual COA)
+                    const splitsToUse = txn.splitReady
+                        ? txn.splits
+                        : (!userSelectedCoa && txn.defaultSplitRule?.splits || []).map(s => ({
                             chartOfAccountId: s.chart_of_account_id || s.chartOfAccountId,
                             percent: s.percentage || s.percent,
                             amount: (parseFloat(s.percentage || s.percent) / 100) * Math.abs(txn.amount),
@@ -392,7 +412,7 @@ export const UncategorizedReceipts = () => {
                         }));
 
                     const updates = {
-                        chart_of_account_id: shouldSplit ? null : (txn.suggestion?.chartOfAccountId || txn.chart_of_account_id),
+                        chart_of_account_id: shouldSplit ? null : (txn.chart_of_account_id || txn.suggestion?.chartOfAccountId),
                         status: shouldSplit ? 'split' : 'categorized',
                         is_split: shouldSplit,
                         normalized_merchant_id: txn.suggestedMerchantId || txn.normalized_merchant_id
@@ -451,19 +471,25 @@ export const UncategorizedReceipts = () => {
                 }
             }
 
-            const message = successCount.failed > 0
-                ? `Categorized ${successCount.updated} transactions. ${successCount.failed} failed.`
-                : `Successfully categorized ${successCount.updated} transactions.`;
-
-            alert(message);
+            setBulkProgress({ current: validTransactions.length, total: validTransactions.length, status: 'Reloading...' });
 
             // Reload transactions
             await loadTransactions();
             setSelectedTxns(new Set());
             setSelectedAll(false);
 
+            // Close progress modal
+            setBulkUpdating(false);
+
+            const message = successCount.failed > 0
+                ? `Categorized ${successCount.updated} transactions. ${successCount.failed} failed.`
+                : `Successfully categorized ${successCount.updated} transactions.`;
+
+            alert(message);
+
         } catch (error) {
             console.error('Bulk update error:', error);
+            setBulkUpdating(false);
             alert('Failed to update: ' + error.message);
         }
     };
@@ -507,9 +533,12 @@ export const UncategorizedReceipts = () => {
 
         // Check if this merchant has a normalized_merchant_id and merchant name
         const merchantId = transaction.normalized_merchant_id;
-        const merchantName = transaction.merchant?.normalized_name;
+        // Get merchant name from linked merchant OR from suggested merchant name
+        const merchantName = transaction.merchant?.normalized_name || transaction.suggestedMerchantName;
 
-        if (merchantId && merchantName) {
+        console.log('Split save - merchantId:', merchantId, 'merchantName:', merchantName);
+
+        if (merchantName) {
             // Check if a split rule already exists for this merchant
             const existingRule = await supabaseMerchantSplitRulesDB.getByMerchantName(merchantName);
 
@@ -530,12 +559,45 @@ export const UncategorizedReceipts = () => {
                                 percentage: parseFloat(s.percent)
                             }));
 
-                        await supabaseMerchantSplitRulesDB.add({
+                        const newRule = await supabaseMerchantSplitRulesDB.add({
                             merchant_friendly_name: merchantName,
                             splits: splitRules
                         });
 
-                        alert(`✓ Default split rule saved for "${merchantName}"`);
+                        console.log('Created split rule:', newRule);
+
+                        // Update other transactions with the same merchant to show default split available
+                        if (newRule) {
+                            setTransactions(prev => {
+                                const updated = prev.map(t => {
+                                    // Skip the current transaction (already marked as splitReady)
+                                    if (t.id === transaction.id) return t;
+
+                                    // Check if this transaction has the same merchant (by linked merchant OR suggested name)
+                                    const txnMerchantName = t.merchant?.normalized_name || t.suggestedMerchantName;
+                                    console.log('Comparing:', txnMerchantName, 'with', merchantName, 'splitReady:', t.splitReady);
+
+                                    if (txnMerchantName === merchantName && !t.splitReady) {
+                                        console.log('Updating transaction:', t.id, 'with default split rule');
+                                        return {
+                                            ...t,
+                                            defaultSplitRule: {
+                                                ...newRule,
+                                                splits: splitRules
+                                            }
+                                        };
+                                    }
+                                    return t;
+                                });
+                                console.log('Updated transactions count:', updated.filter(t => t.defaultSplitRule).length);
+                                return updated;
+                            });
+
+                            // Also update the merchantSplitRules state
+                            setMerchantSplitRules(prev => [...prev, newRule]);
+                        }
+
+                        alert(`✓ Default split rule saved for "${merchantName}". Other transactions from this merchant have been updated.`);
                     } catch (error) {
                         console.error('Error saving default split rule:', error);
                         alert('Failed to save default split rule: ' + error.message);
@@ -590,6 +652,31 @@ export const UncategorizedReceipts = () => {
                 </div>
             </div>
 
+            {/* Bulk Update Progress Modal */}
+            {bulkUpdating && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl p-6 w-96">
+                        <div className="flex items-center gap-3 mb-4">
+                            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                            <h3 className="text-lg font-semibold text-gray-900">Bulk Update in Progress</h3>
+                        </div>
+                        <div className="mb-3">
+                            <div className="flex justify-between text-sm text-gray-600 mb-1">
+                                <span>Processing transactions...</span>
+                                <span>{bulkProgress.current} / {bulkProgress.total}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                <div
+                                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                                    style={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                        <p className="text-sm text-gray-500 truncate">{bulkProgress.status}</p>
+                    </div>
+                </div>
+            )}
+
             {/* Bulk Update Button */}
             {selectedTxns.size > 0 && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -599,8 +686,10 @@ export const UncategorizedReceipts = () => {
                         </span>
                         <button
                             onClick={handleBulkUpdate}
-                            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                            disabled={bulkUpdating}
+                            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
+                            {bulkUpdating && <Loader2 className="w-4 h-4 animate-spin" />}
                             Bulk Update Selected
                         </button>
                     </div>
@@ -809,6 +898,10 @@ export const UncategorizedReceipts = () => {
                                             <div className="text-green-600 font-medium">
                                                 ✓ Split Ready
                                             </div>
+                                        ) : hasManualCoaSelection(txn) ? (
+                                            <div className="text-green-600 font-medium">
+                                                ✓ {chartOfAccounts.find(c => c.id === txn.chart_of_account_id)?.name}
+                                            </div>
                                         ) : txn.defaultSplitRule ? (
                                             <div className="text-purple-600 font-medium">
                                                 💡 Default Split Available
@@ -839,27 +932,34 @@ export const UncategorizedReceipts = () => {
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                     <div className="flex flex-col gap-1">
-                                        {(txn.suggestion?.type === 'split' || txn.defaultSplitRule) && !txn.splitReady ? (
-                                            <button
-                                                onClick={() => setSplitModalTxn(txn)}
-                                                className="px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700"
-                                            >
-                                                Split
-                                            </button>
-                                        ) : !txn.splitReady && (
-                                            <button
-                                                onClick={() => setEditModalTxn(txn)}
-                                                className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                                            >
-                                                Select
-                                            </button>
-                                        )}
-                                        {txn.splitReady && (
+                                        {txn.splitReady ? (
                                             <button
                                                 onClick={() => setSplitModalTxn(txn)}
                                                 className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs hover:bg-purple-200"
                                             >
                                                 Edit Split
+                                            </button>
+                                        ) : (txn.suggestion?.type === 'split' || txn.defaultSplitRule) ? (
+                                            <>
+                                                <button
+                                                    onClick={() => setSplitModalTxn(txn)}
+                                                    className="px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700"
+                                                >
+                                                    Split
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditModalTxn(txn)}
+                                                    className="px-2 py-1 bg-gray-500 text-white rounded text-xs hover:bg-gray-600"
+                                                >
+                                                    Select COA
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <button
+                                                onClick={() => setEditModalTxn(txn)}
+                                                className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                                            >
+                                                Select
                                             </button>
                                         )}
                                         <button
@@ -889,12 +989,15 @@ export const UncategorizedReceipts = () => {
                     chartOfAccounts={chartOfAccounts}
                     onSave={async (coaId) => {
                         try {
+                            const coaName = chartOfAccounts.find(c => c.id === coaId)?.name;
+                            const merchantName = editModalTxn.merchant?.normalized_name || editModalTxn.suggestedMerchantName;
+
                             // Save to database
                             await supabaseTransactionsDB.update(editModalTxn.id, {
                                 chart_of_account_id: coaId
                             });
 
-                            // Update local state
+                            // Update local state for this transaction
                             setTransactions(prev =>
                                 prev.map(t =>
                                     t.id === editModalTxn.id
@@ -904,12 +1007,55 @@ export const UncategorizedReceipts = () => {
                                             suggestion: {
                                                 type: 'coa',
                                                 chartOfAccountId: coaId,
-                                                chartOfAccountName: chartOfAccounts.find(c => c.id === coaId)?.name
+                                                chartOfAccountName: coaName
                                             }
                                         }
                                         : t
                                 )
                             );
+
+                            // If there's a merchant, ask if they want to apply to other transactions
+                            if (merchantName) {
+                                // Count other transactions with the same merchant
+                                const otherTxns = transactions.filter(t =>
+                                    t.id !== editModalTxn.id &&
+                                    !t.splitReady &&
+                                    !t.defaultSplitRule &&
+                                    (t.merchant?.normalized_name === merchantName || t.suggestedMerchantName === merchantName)
+                                );
+
+                                if (otherTxns.length > 0) {
+                                    const applyToOthers = confirm(
+                                        `Found ${otherTxns.length} other transaction(s) from "${merchantName}".\n\n` +
+                                        `Would you like to suggest "${coaName}" for those transactions too?`
+                                    );
+
+                                    if (applyToOthers) {
+                                        // Update suggestions for other transactions with the same merchant
+                                        setTransactions(prev =>
+                                            prev.map(t => {
+                                                if (t.id === editModalTxn.id) return t; // Already updated
+                                                if (t.splitReady || t.defaultSplitRule) return t; // Skip split transactions
+
+                                                const txnMerchantName = t.merchant?.normalized_name || t.suggestedMerchantName;
+                                                if (txnMerchantName === merchantName) {
+                                                    console.log('Updating suggestion for transaction:', t.id);
+                                                    return {
+                                                        ...t,
+                                                        suggestion: {
+                                                            type: 'coa',
+                                                            chartOfAccountId: coaId,
+                                                            chartOfAccountName: coaName
+                                                        }
+                                                    };
+                                                }
+                                                return t;
+                                            })
+                                        );
+                                    }
+                                }
+                            }
+
                             setEditModalTxn(null);
                         } catch (error) {
                             console.error('Error saving COA:', error);
