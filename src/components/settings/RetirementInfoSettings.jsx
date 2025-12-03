@@ -56,8 +56,13 @@ export const RetirementInfoSettings = () => {
         pension_current_value: '',
 
         // Spouse Benefits
+        spouse_cpp_at_60: '',
         spouse_cpp_at_65: '',
+        spouse_cpp_at_70: '',
+        spouse_oas_years_in_canada: '',
         spouse_oas_estimated: '',
+        spouse_has_pension: 'no',
+        spouse_pension_type: '',
         spouse_pension_estimated: ''
     });
 
@@ -177,6 +182,20 @@ export const RetirementInfoSettings = () => {
         return total;
     };
 
+    // Calculate spouse's total monthly benefits at 65
+    const spouseTotalMonthlyAt65 = () => {
+        let total = 0;
+        if (benefits.spouse_cpp_at_65) total += parseFloat(benefits.spouse_cpp_at_65);
+        if (benefits.spouse_oas_estimated) total += parseFloat(benefits.spouse_oas_estimated);
+        if (benefits.spouse_pension_estimated) total += parseFloat(benefits.spouse_pension_estimated);
+        return total;
+    };
+
+    // Calculate family total
+    const familyTotalMonthlyAt65 = () => {
+        return totalMonthlyAt65() + spouseTotalMonthlyAt65();
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -212,12 +231,45 @@ export const RetirementInfoSettings = () => {
                 </div>
             )}
 
-            {/* Summary Card */}
-            {totalMonthlyAt65() > 0 && (
+            {/* Summary Card - Family Benefits */}
+            {(totalMonthlyAt65() > 0 || spouseTotalMonthlyAt65() > 0) && (
                 <div className="mb-6 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg p-6 text-white">
-                    <h3 className="text-lg font-semibold mb-2">Estimated Monthly Benefits at Age 65</h3>
-                    <div className="text-3xl font-bold">${totalMonthlyAt65().toLocaleString()}/month</div>
-                    <div className="text-indigo-200 mt-1">${(totalMonthlyAt65() * 12).toLocaleString()}/year</div>
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <Users className="w-5 h-5" />
+                        Family Benefits at Age 65
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Your Benefits */}
+                        <div className="bg-white/10 rounded-lg p-4">
+                            <p className="text-indigo-200 text-sm">Your Benefits</p>
+                            <p className="text-2xl font-bold">${totalMonthlyAt65().toLocaleString()}/mo</p>
+                            <p className="text-indigo-200 text-sm">${(totalMonthlyAt65() * 12).toLocaleString()}/year</p>
+                            <div className="mt-2 text-xs text-indigo-200 space-y-1">
+                                {benefits.cpp_at_65 && <div>CPP: ${parseFloat(benefits.cpp_at_65).toLocaleString()}</div>}
+                                {benefits.oas_estimated_monthly && <div>OAS: ${parseFloat(benefits.oas_estimated_monthly).toLocaleString()}</div>}
+                                {benefits.pension_estimated_monthly && <div>Pension: ${parseFloat(benefits.pension_estimated_monthly).toLocaleString()}</div>}
+                            </div>
+                        </div>
+                        
+                        {/* Spouse Benefits */}
+                        <div className="bg-white/10 rounded-lg p-4">
+                            <p className="text-indigo-200 text-sm">Spouse Benefits</p>
+                            <p className="text-2xl font-bold">${spouseTotalMonthlyAt65().toLocaleString()}/mo</p>
+                            <p className="text-indigo-200 text-sm">${(spouseTotalMonthlyAt65() * 12).toLocaleString()}/year</p>
+                            <div className="mt-2 text-xs text-indigo-200 space-y-1">
+                                {benefits.spouse_cpp_at_65 && <div>CPP: ${parseFloat(benefits.spouse_cpp_at_65).toLocaleString()}</div>}
+                                {benefits.spouse_oas_estimated && <div>OAS: ${parseFloat(benefits.spouse_oas_estimated).toLocaleString()}</div>}
+                                {benefits.spouse_pension_estimated && <div>Pension: ${parseFloat(benefits.spouse_pension_estimated).toLocaleString()}</div>}
+                            </div>
+                        </div>
+                        
+                        {/* Family Total */}
+                        <div className="bg-white/20 rounded-lg p-4 border-2 border-white/30">
+                            <p className="text-white text-sm font-medium">Family Total</p>
+                            <p className="text-3xl font-bold">${familyTotalMonthlyAt65().toLocaleString()}/mo</p>
+                            <p className="text-indigo-200 text-sm">${(familyTotalMonthlyAt65() * 12).toLocaleString()}/year</p>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -630,50 +682,162 @@ export const RetirementInfoSettings = () => {
                 <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
                     <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                         <Users className="w-5 h-5 text-pink-400" />
-                        Spouse Benefits (if applicable)
+                        Spouse / Partner Benefits
                     </h2>
+                    
+                    <div className="bg-pink-900/20 border border-pink-700/50 rounded-lg p-4 mb-4">
+                        <p className="text-sm text-pink-200">
+                            <strong>Family Planning:</strong> Enter your spouse/partner's expected retirement benefits 
+                            to see your combined family income in retirement. Both partners' income is important 
+                            for retirement planning.
+                        </p>
+                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">
-                                Spouse CPP at 65 ($)
-                            </label>
-                            <input
-                                type="number"
-                                name="spouse_cpp_at_65"
-                                value={benefits.spouse_cpp_at_65}
-                                onChange={handleChange}
-                                placeholder="900"
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">
-                                Spouse OAS ($)
-                            </label>
-                            <input
-                                type="number"
-                                name="spouse_oas_estimated"
-                                value={benefits.spouse_oas_estimated}
-                                onChange={handleChange}
-                                placeholder="700"
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">
-                                Spouse Pension ($)
-                            </label>
-                            <input
-                                type="number"
-                                name="spouse_pension_estimated"
-                                value={benefits.spouse_pension_estimated}
-                                onChange={handleChange}
-                                placeholder="1500"
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
-                            />
+                    {/* Spouse CPP */}
+                    <div className="mb-4">
+                        <h3 className="text-sm font-medium text-gray-400 mb-3">Spouse's CPP</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">
+                                    Spouse CPP at 60 ($)
+                                </label>
+                                <input
+                                    type="number"
+                                    name="spouse_cpp_at_60"
+                                    value={benefits.spouse_cpp_at_60 || ''}
+                                    onChange={handleChange}
+                                    placeholder="650"
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">
+                                    Spouse CPP at 65 ($)
+                                </label>
+                                <input
+                                    type="number"
+                                    name="spouse_cpp_at_65"
+                                    value={benefits.spouse_cpp_at_65}
+                                    onChange={handleChange}
+                                    placeholder="900"
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">
+                                    Spouse CPP at 70 ($)
+                                </label>
+                                <input
+                                    type="number"
+                                    name="spouse_cpp_at_70"
+                                    value={benefits.spouse_cpp_at_70 || ''}
+                                    onChange={handleChange}
+                                    placeholder="1280"
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
                         </div>
                     </div>
+
+                    {/* Spouse OAS */}
+                    <div className="mb-4 pt-4 border-t border-gray-700">
+                        <h3 className="text-sm font-medium text-gray-400 mb-3">Spouse's OAS</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">
+                                    Spouse Years in Canada (after age 18)
+                                </label>
+                                <input
+                                    type="number"
+                                    name="spouse_oas_years_in_canada"
+                                    value={benefits.spouse_oas_years_in_canada || ''}
+                                    onChange={handleChange}
+                                    placeholder="40"
+                                    max="40"
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">
+                                    Spouse Monthly OAS ($)
+                                </label>
+                                <input
+                                    type="number"
+                                    name="spouse_oas_estimated"
+                                    value={benefits.spouse_oas_estimated}
+                                    onChange={handleChange}
+                                    placeholder="700"
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Spouse Pension */}
+                    <div className="pt-4 border-t border-gray-700">
+                        <h3 className="text-sm font-medium text-gray-400 mb-3">Spouse's Employer Pension</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">
+                                    Spouse Has Pension?
+                                </label>
+                                <select
+                                    name="spouse_has_pension"
+                                    value={benefits.spouse_has_pension || 'no'}
+                                    onChange={handleChange}
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    <option value="no">No</option>
+                                    <option value="yes">Yes</option>
+                                </select>
+                            </div>
+                            {(benefits.spouse_has_pension === 'yes' || benefits.spouse_pension_estimated) && (
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                                            Spouse Pension Type
+                                        </label>
+                                        <select
+                                            name="spouse_pension_type"
+                                            value={benefits.spouse_pension_type || ''}
+                                            onChange={handleChange}
+                                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="">Select...</option>
+                                            <option value="db">Defined Benefit</option>
+                                            <option value="dc">Defined Contribution</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                                            Spouse Monthly Pension ($)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="spouse_pension_estimated"
+                                            value={benefits.spouse_pension_estimated}
+                                            onChange={handleChange}
+                                            placeholder="1500"
+                                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Spouse Summary */}
+                    {spouseTotalMonthlyAt65() > 0 && (
+                        <div className="mt-4 pt-4 border-t border-gray-700">
+                            <div className="bg-pink-900/30 border border-pink-700 rounded-lg p-4">
+                                <p className="text-sm text-pink-200">
+                                    <span className="font-medium">Spouse's Total at 65: </span>
+                                    ${spouseTotalMonthlyAt65().toLocaleString()}/month 
+                                    (${(spouseTotalMonthlyAt65() * 12).toLocaleString()}/year)
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Save Button */}
