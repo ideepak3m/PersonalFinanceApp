@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabaseGovernmentBenefitsDB } from '../../services/supabaseDatabase';
+import { CPPContributionCalculator } from './CPPContributionCalculator';
 import {
     Landmark,
     Calendar,
@@ -12,7 +13,8 @@ import {
     Info,
     Calculator,
     Building,
-    Users
+    Users,
+    FileSpreadsheet
 } from 'lucide-react';
 
 export const RetirementInfoSettings = () => {
@@ -21,6 +23,7 @@ export const RetirementInfoSettings = () => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
+    const [showCPPCalculator, setShowCPPCalculator] = useState(false);
     const [benefits, setBenefits] = useState({
         // CPP Information
         cpp_estimated_at_65: '',
@@ -77,7 +80,7 @@ export const RetirementInfoSettings = () => {
         setError(null);
 
         try {
-            const data = await supabaseGovernmentBenefitsDB.getByUserId(user.id);
+            const data = await supabaseGovernmentBenefitsDB.getBenefits();
             if (data) {
                 // Convert nulls to empty strings for form fields
                 const formData = {};
@@ -149,7 +152,7 @@ export const RetirementInfoSettings = () => {
                 last_updated: new Date().toISOString().split('T')[0]
             };
 
-            await supabaseGovernmentBenefitsDB.upsert(benefitsData);
+            await supabaseGovernmentBenefitsDB.upsertBenefits(benefitsData);
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
         } catch (err) {
@@ -172,6 +175,26 @@ export const RetirementInfoSettings = () => {
     };
 
     const estimatedDBPension = calculateDBPension();
+
+    // CPP Quick Estimator (2024 values)
+    // Maximum CPP at 65 in 2024 is ~$1,364.60/month
+    const estimateCPP = () => {
+        const years = parseInt(benefits.cpp_years_contributed) || 0;
+        const maxYears = 39; // Full CPP requires ~39 years of max contributions
+        const maxCPPAt65 = 1365; // 2024 maximum
+
+        if (years === 0) return null;
+
+        // Simple estimate: proportional to years contributed
+        const ratio = Math.min(years / maxYears, 1);
+        const estimatedAt65 = Math.round(maxCPPAt65 * ratio);
+        const estimatedAt60 = Math.round(estimatedAt65 * 0.64); // 36% reduction
+        const estimatedAt70 = Math.round(estimatedAt65 * 1.42); // 42% increase
+
+        return { at60: estimatedAt60, at65: estimatedAt65, at70: estimatedAt70 };
+    };
+
+    const cppEstimate = estimateCPP();
 
     // Calculate total monthly benefits at 65
     const totalMonthlyAt65 = () => {
@@ -273,20 +296,54 @@ export const RetirementInfoSettings = () => {
                 </div>
             )}
 
+            {/* CPP Calculator Modal */}
+            {showCPPCalculator && (
+                <CPPContributionCalculator
+                    onClose={() => setShowCPPCalculator(false)}
+                    onCalculated={(data) => {
+                        setBenefits(prev => ({
+                            ...prev,
+                            cpp_years_contributed: data.cpp_years_contributed,
+                            cpp_contributions_to_date: data.cpp_contributions_to_date,
+                            cpp_at_60: data.cpp_at_60,
+                            cpp_at_65: data.cpp_at_65,
+                            cpp_at_70: data.cpp_at_70
+                        }));
+                        setShowCPPCalculator(false);
+                    }}
+                />
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6">
                 {/* CPP Information */}
                 <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-red-400" />
-                        Canada Pension Plan (CPP)
-                    </h2>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                            <Calendar className="w-5 h-5 text-red-400" />
+                            Canada Pension Plan (CPP)
+                        </h2>
+                        <button
+                            type="button"
+                            onClick={() => setShowCPPCalculator(true)}
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg flex items-center gap-2"
+                        >
+                            <FileSpreadsheet className="w-4 h-4" />
+                            CPP Calculator
+                        </button>
+                    </div>
 
                     <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-4 mb-4">
                         <div className="flex items-start gap-2">
                             <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
                             <div className="text-sm text-blue-200">
-                                <p className="font-medium">Where to find this information:</p>
-                                <p className="mt-1">Log in to your My Service Canada Account to download your CPP Statement of Contributions. It shows your estimated benefits at different ages.</p>
+                                <p className="font-medium">Where to find your CPP estimates:</p>
+                                <ol className="mt-2 list-decimal list-inside space-y-1">
+                                    <li>Log in to <a href="https://www.canada.ca/en/employment-social-development/services/my-account.html" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300">My Service Canada Account</a></li>
+                                    <li>Go to "CPP" → "Statement of Contributions"</li>
+                                    <li>Look for "Estimated Monthly Benefits" section</li>
+                                    <li>Enter the amounts shown for ages 60, 65, and 70 below</li>
+                                </ol>
+                                <p className="mt-2 text-xs text-blue-300">💡 Or use the <strong>CPP Calculator</strong> button above to estimate from your contribution history.</p>
                             </div>
                         </div>
                     </div>
@@ -350,7 +407,36 @@ export const RetirementInfoSettings = () => {
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-gray-700">
-                        <h3 className="text-sm font-medium text-gray-400 mb-3">Estimated Monthly Benefits</h3>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-medium text-gray-400">Estimated Monthly Benefits</h3>
+                            {cppEstimate && !benefits.cpp_at_65 && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setBenefits(prev => ({
+                                            ...prev,
+                                            cpp_at_60: cppEstimate.at60,
+                                            cpp_at_65: cppEstimate.at65,
+                                            cpp_at_70: cppEstimate.at70
+                                        }));
+                                    }}
+                                    className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded flex items-center gap-1"
+                                >
+                                    <Calculator className="w-3 h-3" />
+                                    Use Quick Estimate
+                                </button>
+                            )}
+                        </div>
+
+                        {cppEstimate && !benefits.cpp_at_65 && (
+                            <div className="bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-3 mb-4">
+                                <p className="text-xs text-yellow-200">
+                                    <strong>Quick estimate based on {benefits.cpp_years_contributed} years:</strong> ~${cppEstimate.at65}/mo at 65.
+                                    This is a rough estimate. For accuracy, use your actual CPP Statement values.
+                                </p>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-1">
@@ -405,6 +491,21 @@ export const RetirementInfoSettings = () => {
                         Old Age Security (OAS)
                     </h2>
 
+                    <div className="bg-green-900/30 border border-green-700 rounded-lg p-4 mb-4">
+                        <div className="flex items-start gap-2">
+                            <Info className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                            <div className="text-sm text-green-200">
+                                <p className="font-medium">OAS is simpler than CPP:</p>
+                                <ul className="mt-1 list-disc list-inside space-y-1">
+                                    <li>Full OAS requires 40 years of Canadian residency after age 18</li>
+                                    <li>Maximum monthly OAS in 2024: ~$727 (indexed quarterly)</li>
+                                    <li>Partial OAS: You get 1/40th for each year of residency</li>
+                                    <li>OAS clawback starts at ~$91K income (2024)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-1">
@@ -425,15 +526,35 @@ export const RetirementInfoSettings = () => {
                             <label className="block text-sm font-medium text-gray-300 mb-1">
                                 Estimated Monthly OAS ($)
                             </label>
-                            <input
-                                type="number"
-                                name="oas_estimated_monthly"
-                                value={benefits.oas_estimated_monthly}
-                                onChange={handleChange}
-                                placeholder="727"
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Max ~$727/mo in 2024</p>
+                            <div className="flex gap-2">
+                                <input
+                                    type="number"
+                                    name="oas_estimated_monthly"
+                                    value={benefits.oas_estimated_monthly}
+                                    onChange={handleChange}
+                                    placeholder="727"
+                                    className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                                />
+                                {benefits.oas_years_in_canada && !benefits.oas_estimated_monthly && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const years = Math.min(parseInt(benefits.oas_years_in_canada) || 0, 40);
+                                            const maxOAS = 727;
+                                            const estimated = Math.round((years / 40) * maxOAS);
+                                            setBenefits(prev => ({ ...prev, oas_estimated_monthly: estimated }));
+                                        }}
+                                        className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg whitespace-nowrap"
+                                    >
+                                        Calculate
+                                    </button>
+                                )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                                {benefits.oas_years_in_canada
+                                    ? `${Math.min(parseInt(benefits.oas_years_in_canada), 40)}/40 years = ${Math.round((Math.min(parseInt(benefits.oas_years_in_canada), 40) / 40) * 100)}% of max`
+                                    : 'Max ~$727/mo in 2024'}
+                            </p>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-1">

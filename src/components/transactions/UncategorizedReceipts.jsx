@@ -295,6 +295,9 @@ export const UncategorizedReceipts = () => {
                 // Include split transactions
                 if (t.splitReady) return true;
 
+                // Include transactions with default split rule available
+                if (t.defaultSplitRule && t.defaultSplitRule.splits?.length > 0) return true;
+
                 // Include transactions with COA suggestions that are NOT Suspense
                 if (t.suggestion?.type === 'coa') {
                     const coaId = t.suggestion.chartOfAccountId;
@@ -324,10 +327,13 @@ export const UncategorizedReceipts = () => {
         try {
             const selectedTransactions = transactions.filter(t => selectedTxns.has(t.id));
 
-            // Filter transactions that have a valid COA (not Suspense) or are split ready
+            // Filter transactions that have a valid COA (not Suspense), are split ready, or have default split available
             const validTransactions = selectedTransactions.filter(t => {
-                // Include split transactions
+                // Include split transactions that are manually ready
                 if (t.splitReady) return true;
+
+                // Include transactions with default split rule available
+                if (t.defaultSplitRule && t.defaultSplitRule.splits?.length > 0) return true;
 
                 // Include transactions with COA suggestions that are NOT Suspense
                 if (t.suggestion?.type === 'coa') {
@@ -350,12 +356,21 @@ export const UncategorizedReceipts = () => {
             });
 
             if (validTransactions.length === 0) {
-                alert('No valid transactions ready to update. Please ensure transactions have a Chart of Account selected (not Suspense) or are split ready.');
+                alert('No valid transactions ready to update. Please ensure transactions have a Chart of Account selected (not Suspense), are split ready, or have a default split available.');
                 return;
             }
 
-            // Show confirmation with count
-            const confirm = window.confirm(`Ready to categorize ${validTransactions.length} transaction(s). Continue?`);
+            // Count transactions by type for confirmation message
+            const splitReadyCount = validTransactions.filter(t => t.splitReady).length;
+            const defaultSplitCount = validTransactions.filter(t => !t.splitReady && t.defaultSplitRule).length;
+            const coaCount = validTransactions.length - splitReadyCount - defaultSplitCount;
+
+            // Show confirmation with detailed count
+            const confirmMsg = `Ready to categorize ${validTransactions.length} transaction(s):\n` +
+                `• ${splitReadyCount} manually split\n` +
+                `• ${defaultSplitCount} using default split rules\n` +
+                `• ${coaCount} with suggested COA\n\nContinue?`;
+            const confirm = window.confirm(confirmMsg);
             if (!confirm) return;
 
             const successCount = { updated: 0, failed: 0 };
@@ -363,27 +378,40 @@ export const UncategorizedReceipts = () => {
             // Process each transaction
             for (const txn of validTransactions) {
                 try {
+                    // Determine if this transaction should be split
+                    const shouldSplit = txn.splitReady || (txn.defaultSplitRule && txn.defaultSplitRule.splits?.length > 0);
+                    
+                    // Get splits: either from manual split or from default rule
+                    const splitsToUse = txn.splitReady 
+                        ? txn.splits 
+                        : (txn.defaultSplitRule?.splits || []).map(s => ({
+                            chartOfAccountId: s.chart_of_account_id || s.chartOfAccountId,
+                            percent: s.percentage || s.percent,
+                            amount: (parseFloat(s.percentage || s.percent) / 100) * Math.abs(txn.amount),
+                            description: s.description || null
+                        }));
+
                     const updates = {
-                        chart_of_account_id: txn.splitReady ? null : (txn.suggestion?.chartOfAccountId || txn.chart_of_account_id),
-                        status: txn.splitReady ? 'split' : 'categorized',
-                        is_split: txn.splitReady || false,
+                        chart_of_account_id: shouldSplit ? null : (txn.suggestion?.chartOfAccountId || txn.chart_of_account_id),
+                        status: shouldSplit ? 'split' : 'categorized',
+                        is_split: shouldSplit,
                         normalized_merchant_id: txn.suggestedMerchantId || txn.normalized_merchant_id
                     };
 
                     // Update transaction status and COA
                     await supabaseTransactionsDB.update(txn.id, updates);
 
-                    // If it's a split transaction, save the split records
-                    if (txn.splitReady && txn.splits && txn.splits.length > 0) {
+                    // If it's a split transaction (manual or default), save the split records
+                    if (shouldSplit && splitsToUse && splitsToUse.length > 0) {
                         // Delete existing splits first (in case of re-edit)
                         await supabaseTransactionSplitDB.deleteByTransactionId(txn.id);
 
                         // Prepare split records for database
-                        const splitRecords = txn.splits.map(s => ({
+                        const splitRecords = splitsToUse.map(s => ({
                             transaction_id: txn.id,
                             chart_of_account_id: s.chartOfAccountId,
                             percentage: parseFloat(s.percent) || 0,
-                            amount: parseFloat(s.amount) || 0,
+                            amount: parseFloat(s.amount) || (parseFloat(s.percent) / 100) * Math.abs(txn.amount),
                             description: s.description || null
                         }));
 
@@ -392,15 +420,15 @@ export const UncategorizedReceipts = () => {
                             await supabaseTransactionSplitDB.add(splitRecord);
                         }
 
-                        // Check if this merchant split rule already exists
-                        if (txn.suggestedMerchantName) {
+                        // Only create merchant split rule if this was a manual split (not using default)
+                        if (txn.splitReady && txn.suggestedMerchantName) {
                             const existingRule = await supabaseMerchantSplitRulesDB.getByMerchantName(txn.suggestedMerchantName);
 
                             if (!existingRule) {
                                 // Create new merchant split rule
                                 const ruleRecord = {
                                     merchant_friendly_name: txn.suggestedMerchantName,
-                                    splits: txn.splits.map(s => ({
+                                    splits: splitsToUse.map(s => ({
                                         chartOfAccountId: s.chartOfAccountId,
                                         percent: parseFloat(s.percent) || 0,
                                         description: s.description || null

@@ -92,7 +92,7 @@ export const UserProfileSettings = () => {
         setError(null);
 
         try {
-            const data = await supabaseUserProfileDB.getByUserId(user.id);
+            const data = await supabaseUserProfileDB.getProfile();
             if (data) {
                 setProfile({
                     ...profile,
@@ -148,7 +148,7 @@ export const UserProfileSettings = () => {
                 spouse_date_of_birth: profile.spouse_date_of_birth || null
             };
 
-            await supabaseUserProfileDB.upsert(profileData);
+            await supabaseUserProfileDB.upsertProfile(profileData);
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
         } catch (err) {
