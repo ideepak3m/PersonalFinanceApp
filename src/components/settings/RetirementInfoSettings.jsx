@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { GovernmentBenefitsService } from '../../services/supabaseDatabase';
+import { supabaseGovernmentBenefitsDB } from '../../services/supabaseDatabase';
 import {
     Landmark,
     Calendar,
@@ -77,7 +77,7 @@ export const RetirementInfoSettings = () => {
         setError(null);
 
         try {
-            const data = await GovernmentBenefitsService.getByUserId(user.id);
+            const data = await supabaseGovernmentBenefitsDB.getByUserId(user.id);
             if (data) {
                 // Convert nulls to empty strings for form fields
                 const formData = {};
@@ -149,7 +149,7 @@ export const RetirementInfoSettings = () => {
                 last_updated: new Date().toISOString().split('T')[0]
             };
 
-            await GovernmentBenefitsService.upsert(benefitsData);
+            await supabaseGovernmentBenefitsDB.upsert(benefitsData);
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
         } catch (err) {
@@ -250,7 +250,7 @@ export const RetirementInfoSettings = () => {
                                 {benefits.pension_estimated_monthly && <div>Pension: ${parseFloat(benefits.pension_estimated_monthly).toLocaleString()}</div>}
                             </div>
                         </div>
-                        
+
                         {/* Spouse Benefits */}
                         <div className="bg-white/10 rounded-lg p-4">
                             <p className="text-indigo-200 text-sm">Spouse Benefits</p>
@@ -262,7 +262,7 @@ export const RetirementInfoSettings = () => {
                                 {benefits.spouse_pension_estimated && <div>Pension: ${parseFloat(benefits.spouse_pension_estimated).toLocaleString()}</div>}
                             </div>
                         </div>
-                        
+
                         {/* Family Total */}
                         <div className="bg-white/20 rounded-lg p-4 border-2 border-white/30">
                             <p className="text-white text-sm font-medium">Family Total</p>
@@ -684,11 +684,11 @@ export const RetirementInfoSettings = () => {
                         <Users className="w-5 h-5 text-pink-400" />
                         Spouse / Partner Benefits
                     </h2>
-                    
+
                     <div className="bg-pink-900/20 border border-pink-700/50 rounded-lg p-4 mb-4">
                         <p className="text-sm text-pink-200">
-                            <strong>Family Planning:</strong> Enter your spouse/partner's expected retirement benefits 
-                            to see your combined family income in retirement. Both partners' income is important 
+                            <strong>Family Planning:</strong> Enter your spouse/partner's expected retirement benefits
+                            to see your combined family income in retirement. Both partners' income is important
                             for retirement planning.
                         </p>
                     </div>
@@ -832,7 +832,7 @@ export const RetirementInfoSettings = () => {
                             <div className="bg-pink-900/30 border border-pink-700 rounded-lg p-4">
                                 <p className="text-sm text-pink-200">
                                     <span className="font-medium">Spouse's Total at 65: </span>
-                                    ${spouseTotalMonthlyAt65().toLocaleString()}/month 
+                                    ${spouseTotalMonthlyAt65().toLocaleString()}/month
                                     (${(spouseTotalMonthlyAt65() * 12).toLocaleString()}/year)
                                 </p>
                             </div>

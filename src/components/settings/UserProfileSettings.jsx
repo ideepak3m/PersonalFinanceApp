@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { UserProfileService } from '../../services/supabaseDatabase';
+import { supabaseUserProfileDB } from '../../services/supabaseDatabase';
 import {
     User,
     Calendar,
@@ -92,7 +92,7 @@ export const UserProfileSettings = () => {
         setError(null);
 
         try {
-            const data = await UserProfileService.getByUserId(user.id);
+            const data = await supabaseUserProfileDB.getByUserId(user.id);
             if (data) {
                 setProfile({
                     ...profile,
@@ -148,7 +148,7 @@ export const UserProfileSettings = () => {
                 spouse_date_of_birth: profile.spouse_date_of_birth || null
             };
 
-            await UserProfileService.upsert(profileData);
+            await supabaseUserProfileDB.upsert(profileData);
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
         } catch (err) {

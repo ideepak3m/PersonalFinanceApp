@@ -470,8 +470,8 @@ export const InvestmentGrowth = () => {
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={`px-2 py-1 text-xs rounded ${typeColors[holding.accountType]
-                                                ? `${typeColors[holding.accountType]}/20 text-white`
-                                                : 'bg-gray-600 text-gray-300'
+                                            ? `${typeColors[holding.accountType]}/20 text-white`
+                                            : 'bg-gray-600 text-gray-300'
                                             }`}>
                                             {holding.accountType}
                                         </span>

@@ -165,8 +165,8 @@ export const TransactionForm = ({
                         type="button"
                         onClick={() => setFormData(prev => ({ ...prev, type: 'expense' }))}
                         className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${formData.type === 'expense'
-                                ? 'bg-red-500 text-white'
-                                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                             }`}
                     >
                         Expense
@@ -175,8 +175,8 @@ export const TransactionForm = ({
                         type="button"
                         onClick={() => setFormData(prev => ({ ...prev, type: 'income' }))}
                         className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${formData.type === 'income'
-                                ? 'bg-green-500 text-white'
-                                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                            ? 'bg-green-500 text-white'
+                            : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                             }`}
                     >
                         Income
