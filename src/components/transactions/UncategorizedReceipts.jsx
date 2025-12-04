@@ -100,7 +100,17 @@ export const UncategorizedReceipts = () => {
 
     const loadTransactions = async (merchantsData = null, categoriesData = null, coaData = null, splitRulesData = null) => {
         try {
-            const { data, error } = await supabaseTransactionsDB.table()
+            // Get suspense account ID
+            const coaList = coaData || chartOfAccounts;
+            const suspense = coaList.find(c => c.name?.toLowerCase() === 'suspense');
+            const suspenseId = suspense?.id;
+
+            console.log('loadTransactions - suspenseId:', suspenseId, 'coaList length:', coaList?.length);
+
+            // Load transactions that are either:
+            // 1. status = 'uncategorized' OR
+            // 2. chart_of_account_id = suspense (these were categorized but still have suspense COA)
+            let query = supabaseTransactionsDB.table()
                 .select(`
                     *,
                     merchant:normalized_merchant_id (
@@ -110,17 +120,28 @@ export const UncategorizedReceipts = () => {
                     )
                 `)
                 .eq('account_id', accountId)
-                .eq('status', 'uncategorized')
                 .order('date', { ascending: false });
+
+            // Use OR filter to get both uncategorized and suspense transactions
+            if (suspenseId) {
+                const orFilter = `status.eq.uncategorized,chart_of_account_id.eq.${suspenseId}`;
+                console.log('Using OR filter:', orFilter);
+                query = query.or(orFilter);
+            } else {
+                console.log('No suspense ID found, falling back to status only');
+                query = query.eq('status', 'uncategorized');
+            }
+
+            const { data, error } = await query;
+            console.log('Query returned:', data?.length, 'transactions, error:', error);
 
             if (error) throw error;
 
-            //console.log('Loaded transactions:', data?.length, 'First txn:', data?.[0]);
+            console.log('Loaded transactions:', data?.length, '(uncategorized + suspense)');
 
             // Use passed data or fall back to state
             const merchantsList = merchantsData || merchants;
             const categoriesList = categoriesData || categories;
-            const coaList = coaData || chartOfAccounts;
             const splitRulesList = splitRulesData || merchantSplitRules;
 
             // Enrich with suggestions AND suggested merchant
@@ -437,7 +458,8 @@ export const UncategorizedReceipts = () => {
                         }));
 
                     const updates = {
-                        chart_of_account_id: shouldSplit ? null : (txn.chart_of_account_id || txn.suggestion?.chartOfAccountId),
+                        // Use suggestion COA first (user selected or auto-suggested), fall back to existing only if no suggestion
+                        chart_of_account_id: shouldSplit ? null : (txn.suggestion?.chartOfAccountId || txn.chart_of_account_id),
                         status: shouldSplit ? 'split' : 'categorized',
                         is_split: shouldSplit,
                         normalized_merchant_id: txn.suggestedMerchantId || txn.normalized_merchant_id

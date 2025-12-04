@@ -12,7 +12,11 @@ import {
     Filter,
     ChevronDown,
     ArrowUpRight,
-    ArrowDownRight
+    ArrowDownRight,
+    X,
+    Edit2,
+    Check,
+    XCircle
 } from 'lucide-react';
 
 const MONTHS = [
@@ -29,6 +33,10 @@ export const ExpenseAnalysis = () => {
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedMonth, setSelectedMonth] = useState(null); // null = all months
     const [viewMode, setViewMode] = useState('category'); // 'category' | 'monthly' | 'yoy'
+    const [selectedCategory, setSelectedCategory] = useState(null); // For drill-down modal
+    const [chartOfAccounts, setChartOfAccounts] = useState([]); // For COA dropdown
+    const [editingTxnId, setEditingTxnId] = useState(null); // Transaction being edited
+    const [editingCoaId, setEditingCoaId] = useState(null); // Selected COA for edit
 
     useEffect(() => {
         if (user) {
@@ -65,14 +73,27 @@ export const ExpenseAnalysis = () => {
 
             if (txnError) throw txnError;
 
-            // Filter for expense transactions (negative amounts or expense categories)
+            // Debug: Log account types to understand data
+            const accountTypes = [...new Set((txns || []).map(t => t.chart_of_account?.account_type))];
+            console.log('Available account_types:', accountTypes);
+            console.log('Total transactions loaded:', txns?.length);
+            console.log('Sample transaction:', txns?.[0]);
+
+            // Filter for expense transactions - only include those with Expense account type
+            // Exclude Suspense and any non-expense account types
             const expenses = (txns || []).filter(t => {
-                // Expense = negative amount OR expense category
-                const isExpense = parseFloat(t.amount) < 0 ||
-                    t.chart_of_account?.account_type === 'expense' ||
-                    !t.chart_of_account?.account_type?.includes('income');
-                return isExpense && parseFloat(t.amount) !== 0;
+                const accountType = t.chart_of_account?.account_type;
+                const accountName = t.chart_of_account?.name?.toLowerCase();
+
+                // Exclude Suspense account
+                if (accountName === 'suspense') return false;
+
+                // Only include Expense account type
+                // Accept both 'Expense' and 'expense' for case-insensitivity
+                return accountType?.toLowerCase() === 'expense';
             });
+
+            console.log('Filtered expense transactions:', expenses.length);
 
             setTransactions(expenses);
 
@@ -84,12 +105,64 @@ export const ExpenseAnalysis = () => {
             if (catError) throw catError;
             setCategories(cats || []);
 
+            // Load chart of accounts for editing
+            const { data: coa, error: coaError } = await supabase
+                .from('chart_of_accounts')
+                .select('id, name, account_type')
+                .order('name');
+
+            if (coaError) throw coaError;
+            setChartOfAccounts(coa || []);
+
         } catch (err) {
             console.error('Error loading expense data:', err);
             setError('Failed to load expense data');
         } finally {
             setLoading(false);
         }
+    };
+
+    // Update transaction COA
+    const updateTransactionCoa = async (txnId, newCoaId) => {
+        try {
+            const newCoa = chartOfAccounts.find(c => c.id === newCoaId);
+
+            const { error } = await supabase
+                .from('transactions')
+                .update({ chart_of_account_id: newCoaId })
+                .eq('id', txnId);
+
+            if (error) throw error;
+
+            // Update local state
+            setTransactions(prev => prev.map(t => {
+                if (t.id === txnId) {
+                    return {
+                        ...t,
+                        chart_of_account_id: newCoaId,
+                        chart_of_account: newCoa
+                    };
+                }
+                return t;
+            }));
+
+            setEditingTxnId(null);
+            setEditingCoaId(null);
+        } catch (err) {
+            console.error('Error updating transaction COA:', err);
+        }
+    };
+
+    // Cancel editing
+    const cancelEdit = () => {
+        setEditingTxnId(null);
+        setEditingCoaId(null);
+    };
+
+    // Start editing a transaction
+    const startEdit = (txn) => {
+        setEditingTxnId(txn.id);
+        setEditingCoaId(txn.chart_of_account_id);
     };
 
     // Calculate metrics
@@ -107,10 +180,11 @@ export const ExpenseAnalysis = () => {
         const totalExpenses = filteredTxns.reduce((sum, t) =>
             sum + Math.abs(parseFloat(t.amount) || 0), 0);
 
-        // By category
+        // By category - use chart_of_account name for expense categorization
         const byCategory = {};
         filteredTxns.forEach(t => {
-            const catName = t.category?.name || t.chart_of_account?.name || 'Uncategorized';
+            // For expense report, use chart_of_account name as the category
+            const catName = t.chart_of_account?.name || t.category?.name || 'Other';
             byCategory[catName] = (byCategory[catName] || 0) + Math.abs(parseFloat(t.amount) || 0);
         });
 
@@ -293,24 +367,28 @@ export const ExpenseAnalysis = () => {
                         <BarChart3 className="w-5 h-5 text-indigo-400" />
                         Monthly Expenses
                     </h2>
-                    <div className="flex items-end justify-between gap-1 h-48">
-                        {metrics.byMonth.map((amount, idx) => (
-                            <div key={idx} className="flex-1 flex flex-col items-center">
-                                <div
-                                    className={`w-full rounded-t transition-all cursor-pointer hover:opacity-80 ${selectedMonth === idx ? 'bg-indigo-500' : 'bg-indigo-500/60'
-                                        }`}
-                                    style={{
-                                        height: `${(amount / maxMonthlyExpense) * 100}%`,
-                                        minHeight: amount > 0 ? '4px' : '0'
-                                    }}
-                                    onClick={() => setSelectedMonth(selectedMonth === idx ? null : idx)}
-                                    title={`${MONTHS[idx]}: ${formatCurrency(amount)}`}
-                                />
-                                <span className="text-xs text-gray-500 mt-1">
-                                    {MONTHS[idx].substring(0, 1)}
-                                </span>
-                            </div>
-                        ))}
+                    <div className="flex items-end justify-between gap-1" style={{ height: '192px' }}>
+                        {metrics.byMonth.map((amount, idx) => {
+                            const barHeight = maxMonthlyExpense > 0
+                                ? Math.max((amount / maxMonthlyExpense) * 160, amount > 0 ? 4 : 0)
+                                : 0;
+                            return (
+                                <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full">
+                                    <div
+                                        className={`w-full rounded-t transition-all cursor-pointer hover:opacity-80 ${selectedMonth === idx ? 'bg-indigo-500' : 'bg-indigo-500/60'
+                                            }`}
+                                        style={{
+                                            height: `${barHeight}px`,
+                                        }}
+                                        onClick={() => setSelectedMonth(selectedMonth === idx ? null : idx)}
+                                        title={`${MONTHS[idx]}: ${formatCurrency(amount)}`}
+                                    />
+                                    <span className="text-xs text-gray-500 mt-1">
+                                        {MONTHS[idx].substring(0, 1)}
+                                    </span>
+                                </div>
+                            );
+                        })}
                     </div>
                     <div className="mt-4 text-center">
                         <p className="text-sm text-gray-400">
@@ -394,11 +472,15 @@ export const ExpenseAnalysis = () => {
                         </thead>
                         <tbody className="divide-y divide-gray-700">
                             {metrics.byCategory.map((cat, idx) => (
-                                <tr key={cat.name} className="hover:bg-gray-700/30">
+                                <tr
+                                    key={cat.name}
+                                    className="hover:bg-gray-700/30 cursor-pointer"
+                                    onClick={() => setSelectedCategory(cat.name)}
+                                >
                                     <td className="px-4 py-3">
                                         <div className="flex items-center gap-2">
                                             <div className={`w-2 h-2 rounded-full ${categoryColors[idx % categoryColors.length]}`} />
-                                            <span className="text-gray-300">{cat.name}</span>
+                                            <span className="text-gray-300 hover:text-indigo-400">{cat.name}</span>
                                         </div>
                                     </td>
                                     <td className="px-4 py-3 text-right text-white font-medium">
@@ -431,6 +513,153 @@ export const ExpenseAnalysis = () => {
                     </table>
                 </div>
             </div>
+
+            {/* Category Transactions Modal */}
+            {selectedCategory && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedCategory(null)}>
+                    <div
+                        className="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-4xl max-h-[80vh] overflow-hidden m-4"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+                            <div>
+                                <h3 className="text-lg font-semibold text-white">{selectedCategory}</h3>
+                                <p className="text-sm text-gray-400">
+                                    {transactions.filter(t => (t.chart_of_account?.name || t.category?.name || 'Other') === selectedCategory).length} transactions
+                                    {selectedMonth !== null ? ` in ${MONTHS[selectedMonth]}` : ''} {selectedYear}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedCategory(null)}
+                                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                            >
+                                <X className="w-5 h-5 text-gray-400" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body - Transaction List */}
+                        <div className="overflow-y-auto max-h-[calc(80vh-120px)]">
+                            <table className="w-full text-sm">
+                                <thead className="bg-gray-700/50 sticky top-0">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left font-medium text-gray-400">Date</th>
+                                        <th className="px-4 py-3 text-left font-medium text-gray-400">Description</th>
+                                        <th className="px-4 py-3 text-left font-medium text-gray-400">Merchant</th>
+                                        <th className="px-4 py-3 text-left font-medium text-gray-400">COA</th>
+                                        <th className="px-4 py-3 text-right font-medium text-gray-400">Amount</th>
+                                        <th className="px-4 py-3 text-center font-medium text-gray-400 w-20">Edit</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-700">
+                                    {transactions
+                                        .filter(t => {
+                                            const catName = t.chart_of_account?.name || t.category?.name || 'Other';
+                                            if (catName !== selectedCategory) return false;
+                                            if (selectedMonth !== null) {
+                                                const month = new Date(t.date).getMonth();
+                                                return month === selectedMonth;
+                                            }
+                                            return true;
+                                        })
+                                        .sort((a, b) => new Date(b.date) - new Date(a.date))
+                                        .map(txn => (
+                                            <tr key={txn.id} className="hover:bg-gray-700/30">
+                                                <td className="px-4 py-3 text-gray-300 whitespace-nowrap">
+                                                    {new Date(txn.date).toLocaleDateString('en-CA')}
+                                                </td>
+                                                <td className="px-4 py-3 text-gray-300 max-w-xs truncate" title={txn.description}>
+                                                    {txn.description}
+                                                </td>
+                                                <td className="px-4 py-3 text-gray-400">
+                                                    {txn.raw_merchant_name || '-'}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {editingTxnId === txn.id ? (
+                                                        <select
+                                                            value={editingCoaId || ''}
+                                                            onChange={(e) => setEditingCoaId(e.target.value)}
+                                                            className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:ring-2 focus:ring-indigo-500"
+                                                            autoFocus
+                                                        >
+                                                            <option value="">Select COA...</option>
+                                                            {chartOfAccounts
+                                                                .filter(c => c.account_type?.toLowerCase() === 'expense')
+                                                                .map(coa => (
+                                                                    <option key={coa.id} value={coa.id}>
+                                                                        {coa.name}
+                                                                    </option>
+                                                                ))
+                                                            }
+                                                        </select>
+                                                    ) : (
+                                                        <span className="text-indigo-400">
+                                                            {txn.chart_of_account?.name || '-'}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-red-400 font-medium whitespace-nowrap">
+                                                    {formatCurrency(Math.abs(parseFloat(txn.amount)))}
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    {editingTxnId === txn.id ? (
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            <button
+                                                                onClick={() => updateTransactionCoa(txn.id, editingCoaId)}
+                                                                className="p-1 hover:bg-green-600/20 rounded text-green-400"
+                                                                title="Save"
+                                                                disabled={!editingCoaId}
+                                                            >
+                                                                <Check className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={cancelEdit}
+                                                                className="p-1 hover:bg-red-600/20 rounded text-red-400"
+                                                                title="Cancel"
+                                                            >
+                                                                <XCircle className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => startEdit(txn)}
+                                                            className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-white"
+                                                            title="Edit COA"
+                                                        >
+                                                            <Edit2 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    }
+                                </tbody>
+                                <tfoot className="bg-gray-700/30">
+                                    <tr>
+                                        <td colSpan="4" className="px-4 py-3 font-medium text-white">Total</td>
+                                        <td className="px-4 py-3 text-right font-bold text-red-400">
+                                            {formatCurrency(
+                                                transactions
+                                                    .filter(t => {
+                                                        const catName = t.chart_of_account?.name || t.category?.name || 'Other';
+                                                        if (catName !== selectedCategory) return false;
+                                                        if (selectedMonth !== null) {
+                                                            const month = new Date(t.date).getMonth();
+                                                            return month === selectedMonth;
+                                                        }
+                                                        return true;
+                                                    })
+                                                    .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount) || 0), 0)
+                                            )}
+                                        </td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

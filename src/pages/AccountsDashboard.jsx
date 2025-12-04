@@ -69,7 +69,7 @@ export const AccountsDashboard = () => {
             setSuspenseAccount(suspense);
 
             const [counts, pending, lastDates] = await Promise.all([
-                getUncategorizedCounts(),
+                getUncategorizedCounts(suspense?.id),
                 getPendingImportCounts(),
                 getLastTransactionDates()
             ]);
@@ -85,11 +85,19 @@ export const AccountsDashboard = () => {
         }
     };
 
-    const getUncategorizedCounts = async () => {
+    const getUncategorizedCounts = async (suspenseId = null) => {
         try {
-            const { data, error } = await supabaseTransactionsDB.table()
-                .select('account_id')
-                .eq('status', 'uncategorized');
+            let query = supabaseTransactionsDB.table()
+                .select('account_id');
+
+            // Include both uncategorized status AND suspense COA transactions
+            if (suspenseId) {
+                query = query.or(`status.eq.uncategorized,chart_of_account_id.eq.${suspenseId}`);
+            } else {
+                query = query.eq('status', 'uncategorized');
+            }
+
+            const { data, error } = await query;
 
             if (error) throw error;
 
