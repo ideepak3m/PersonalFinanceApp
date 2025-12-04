@@ -5,6 +5,7 @@ import { Search, ChevronLeft, Loader2 } from 'lucide-react';
 import { TransactionUpload } from './TransactionUpload';
 import { EditCoAModal } from './EditCoAModal';
 import { ImprovedSplitModal } from './ImprovedSplitModal';
+import { useConfirmModal } from '../common/ConfirmModal';
 import transactionService from '../../services/transactionService';
 import {
     supabaseAccountsDB,
@@ -20,6 +21,7 @@ import { transactionLogic } from '../../services/transactionBusinessLogic';
 export const UncategorizedReceipts = () => {
     const { accountId } = useParams();
     const navigate = useNavigate();
+    const { confirm, alert, ConfirmModalComponent } = useConfirmModal();
 
     const [account, setAccount] = useState(null);
     const [transactions, setTransactions] = useState([]);
@@ -90,7 +92,7 @@ export const UncategorizedReceipts = () => {
 
         } catch (error) {
             console.error('Error loading data:', error);
-            alert('Failed to load data');
+            await alert('Failed to load data', 'Error', 'error');
         } finally {
             setLoading(false);
         }
@@ -162,22 +164,36 @@ export const UncategorizedReceipts = () => {
         }
     };
 
+    // Helper function to check if a word matches with word boundaries
+    // Returns true if searchTerm appears as a complete word or at the start of a word in description
+    const matchesWithWordBoundary = (description, searchTerm) => {
+        if (!description || !searchTerm) return false;
+        const descLower = description.toLowerCase();
+        const termLower = searchTerm.toLowerCase().trim();
+
+        // Create regex pattern that matches:
+        // - Start of string or non-alphanumeric character before the term
+        // - The search term
+        // - End of string or non-alphanumeric character after the term
+        // This prevents "BELLE" from matching "BELL"
+        const pattern = new RegExp(`(^|[^a-z0-9])${termLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`, 'i');
+        return pattern.test(descLower);
+    };
+
     // Helper function to find matching merchant
     const findMatchingMerchant = (description, merchantsList) => {
         if (!description || !merchantsList || merchantsList.length === 0) return null;
 
-        const descLower = description.toLowerCase();
-
         // Try to find merchant by checking if description contains merchant name or aliases
         const merchant = merchantsList.find(m => {
-            // Check normalized_name
-            if (m.normalized_name && descLower.includes(m.normalized_name.toLowerCase())) {
+            // Check normalized_name with word boundary
+            if (m.normalized_name && matchesWithWordBoundary(description, m.normalized_name)) {
                 return true;
             }
-            // Check aliases
+            // Check aliases with word boundary
             if (Array.isArray(m.aliases)) {
                 return m.aliases.some(alias =>
-                    alias && descLower.includes(alias.toLowerCase())
+                    alias && matchesWithWordBoundary(description, alias)
                 );
             }
             return false;
@@ -189,20 +205,16 @@ export const UncategorizedReceipts = () => {
     const getSuggestion = (txn, merchantsList, categoriesList, coaList) => {
         if (!txn.description || !merchantsList || merchantsList.length === 0) return null;
 
-        const descLower = txn.description.toLowerCase();
-
-        //console.log('Checking suggestion for:', txn.description, 'against', merchantsList.length, 'merchants');
-
         // Try to find merchant - check if description contains merchant name or aliases
         const merchant = merchantsList.find(m => {
-            // Check normalized_name
-            if (m.normalized_name && descLower.includes(m.normalized_name.toLowerCase())) {
+            // Check normalized_name with word boundary
+            if (m.normalized_name && matchesWithWordBoundary(txn.description, m.normalized_name)) {
                 return true;
             }
-            // Check aliases
+            // Check aliases with word boundary
             if (Array.isArray(m.aliases)) {
                 return m.aliases.some(alias =>
-                    alias && descLower.includes(alias.toLowerCase())
+                    alias && matchesWithWordBoundary(txn.description, alias)
                 );
             }
             return false;
@@ -227,10 +239,22 @@ export const UncategorizedReceipts = () => {
             };
         }
 
-        // Find default COA for this category (simplified - you can improve this)
-        const suggestedCoa = coaList.find(coa =>
-            coa.name?.toLowerCase().includes(category?.name?.toLowerCase())
-        );
+        // Find COA matching the category name (try exact match first, then partial)
+        let suggestedCoa = null;
+        if (category?.name) {
+            const categoryNameLower = category.name.toLowerCase();
+            // Try exact match first
+            suggestedCoa = coaList.find(coa =>
+                coa.name?.toLowerCase() === categoryNameLower
+            );
+            // If no exact match, try partial match
+            if (!suggestedCoa) {
+                suggestedCoa = coaList.find(coa =>
+                    coa.name?.toLowerCase().includes(categoryNameLower) ||
+                    categoryNameLower.includes(coa.name?.toLowerCase())
+                );
+            }
+        }
 
         if (suggestedCoa) {
             return {
@@ -241,7 +265,12 @@ export const UncategorizedReceipts = () => {
             };
         }
 
-        return null;
+        // If merchant exists but no category/COA match, return merchant info so UI knows it's linked
+        return {
+            type: 'merchant_only',
+            merchantName: merchant.normalized_name,
+            message: 'Merchant linked - please select COA'
+        };
     };
 
     const handleUpload = async (file) => {
@@ -256,7 +285,7 @@ export const UncategorizedReceipts = () => {
                 const data = await transactionService.parseQBOQFX(file);
                 mapped = transactionService.mapQBOQFXToTransactions(data, accountId);
             } else {
-                alert('Unsupported format');
+                await alert('Unsupported format', 'Error', 'error');
                 return;
             }
 
@@ -270,10 +299,10 @@ export const UncategorizedReceipts = () => {
             await transactionLogic.bulkSaveTransactions(toSave);
             await loadTransactions();
 
-            alert(`Uploaded ${toSave.length} transactions`);
+            await alert(`Uploaded ${toSave.length} transactions`, 'Success', 'success');
         } catch (error) {
             console.error('Upload error:', error);
-            alert('Upload failed');
+            await alert('Upload failed', 'Error', 'error');
         } finally {
             setLoading(false);
         }
@@ -358,7 +387,7 @@ export const UncategorizedReceipts = () => {
             });
 
             if (validTransactions.length === 0) {
-                alert('No valid transactions ready to update. Please ensure transactions have a Chart of Account selected (not Suspense), are split ready, or have a default split available.');
+                await alert('No valid transactions ready to update. Please ensure transactions have a Chart of Account selected (not Suspense), are split ready, or have a default split available.', 'No Valid Transactions', 'warning');
                 return;
             }
 
@@ -370,13 +399,9 @@ export const UncategorizedReceipts = () => {
             const suggestedCoaCount = validTransactions.length - splitReadyCount - manualCoaCount - defaultSplitCount;
 
             // Show confirmation with detailed count
-            const confirmMsg = `Ready to categorize ${validTransactions.length} transaction(s):\n` +
-                `• ${splitReadyCount} manually split\n` +
-                `• ${manualCoaCount} with manually selected COA\n` +
-                `• ${defaultSplitCount} using default split rules\n` +
-                `• ${suggestedCoaCount} with suggested COA\n\nContinue?`;
-            const confirm = window.confirm(confirmMsg);
-            if (!confirm) return;
+            const confirmMsg = `Ready to categorize ${validTransactions.length} transaction(s):\n• ${splitReadyCount} manually split\n• ${manualCoaCount} with manually selected COA\n• ${defaultSplitCount} using default split rules\n• ${suggestedCoaCount} with suggested COA\n\nContinue?`;
+            const shouldContinue = await confirm(confirmMsg, 'Bulk Update');
+            if (!shouldContinue) return;
 
             // Show progress modal
             setBulkUpdating(true);
@@ -485,20 +510,21 @@ export const UncategorizedReceipts = () => {
                 ? `Categorized ${successCount.updated} transactions. ${successCount.failed} failed.`
                 : `Successfully categorized ${successCount.updated} transactions.`;
 
-            alert(message);
+            await alert(message, successCount.failed > 0 ? 'Partial Success' : 'Success', successCount.failed > 0 ? 'warning' : 'success');
 
         } catch (error) {
             console.error('Bulk update error:', error);
             setBulkUpdating(false);
-            alert('Failed to update: ' + error.message);
+            await alert('Failed to update: ' + error.message, 'Error', 'error');
         }
     };
 
     const handleDelete = async (txn) => {
         if (txn.splitReady) {
             // Ask if delete split or transaction
-            const choice = window.confirm(
-                'This transaction has splits. Click OK to delete entire transaction, Cancel to remove split only.'
+            const choice = await confirm(
+                'This transaction has splits.\n\nYes = Delete entire transaction\nNo = Remove split only',
+                'Delete Transaction'
             );
 
             if (choice) {
@@ -512,7 +538,7 @@ export const UncategorizedReceipts = () => {
                 return;
             }
         } else {
-            if (!window.confirm('Delete this transaction?')) return;
+            if (!await confirm('Delete this transaction?', 'Delete')) return;
             await supabaseTransactionsDB.delete(txn.id);
         }
 
@@ -544,9 +570,9 @@ export const UncategorizedReceipts = () => {
 
             if (!existingRule) {
                 // Ask user if they want to save as default
-                const saveAsDefault = confirm(
-                    `Would you like to save this split as the default for "${merchantName}"?\n\n` +
-                    `This will automatically suggest this split configuration for future transactions from this merchant.`
+                const saveAsDefault = await confirm(
+                    `Would you like to save this split as the default for "${merchantName}"?\n\nThis will automatically suggest this split configuration for future transactions from this merchant.`,
+                    'Save Default Split'
                 );
 
                 if (saveAsDefault) {
@@ -597,10 +623,10 @@ export const UncategorizedReceipts = () => {
                             setMerchantSplitRules(prev => [...prev, newRule]);
                         }
 
-                        alert(`✓ Default split rule saved for "${merchantName}". Other transactions from this merchant have been updated.`);
+                        await alert(`Default split rule saved for "${merchantName}". Other transactions from this merchant have been updated.`, 'Success', 'success');
                     } catch (error) {
                         console.error('Error saving default split rule:', error);
-                        alert('Failed to save default split rule: ' + error.message);
+                        await alert('Failed to save default split rule: ' + error.message, 'Error', 'error');
                     }
                 }
             }
@@ -823,20 +849,107 @@ export const UncategorizedReceipts = () => {
                                                                         key={merchant.id}
                                                                         onClick={async () => {
                                                                             try {
+                                                                                // Save this transaction's merchant link
                                                                                 await supabaseTransactionsDB.update(txn.id, {
                                                                                     normalized_merchant_id: merchant.id
                                                                                 });
                                                                                 setMerchantSearch({ ...merchantSearch, [txn.id]: merchant.normalized_name });
                                                                                 setShowMerchantDropdown({ ...showMerchantDropdown, [txn.id]: false });
+
+                                                                                // Add description as alias for future auto-matching
+                                                                                const descriptionToAdd = txn.description?.trim();
+                                                                                if (descriptionToAdd) {
+                                                                                    const currentAliases = merchant.aliases || [];
+                                                                                    // Check if this description or a similar pattern isn't already in aliases
+                                                                                    const alreadyHasAlias = currentAliases.some(alias =>
+                                                                                        alias?.toLowerCase() === descriptionToAdd.toLowerCase() ||
+                                                                                        descriptionToAdd.toLowerCase().includes(alias?.toLowerCase())
+                                                                                    );
+
+                                                                                    if (!alreadyHasAlias) {
+                                                                                        // Extract a clean alias pattern (remove numbers/dates at the end)
+                                                                                        const aliasPattern = descriptionToAdd.replace(/[#\d]+$/, '').trim();
+                                                                                        const newAliases = [...currentAliases, aliasPattern];
+                                                                                        await supabaseMerchantDB.update(merchant.id, { aliases: newAliases });
+                                                                                        console.log(`Added alias "${aliasPattern}" to merchant "${merchant.normalized_name}"`);
+                                                                                    }
+                                                                                }
+
+                                                                                // Check if merchant has a category with matching COA
+                                                                                const category = categories.find(c => c.id === merchant.category_id);
+                                                                                let matchedCoa = null;
+                                                                                if (category?.name && !category?.is_split_enabled) {
+                                                                                    const categoryNameLower = category.name.toLowerCase();
+                                                                                    matchedCoa = chartOfAccounts.find(coa =>
+                                                                                        coa.name?.toLowerCase() === categoryNameLower
+                                                                                    ) || chartOfAccounts.find(coa =>
+                                                                                        coa.name?.toLowerCase().includes(categoryNameLower) ||
+                                                                                        categoryNameLower.includes(coa.name?.toLowerCase())
+                                                                                    );
+                                                                                }
+
+                                                                                // Find other transactions with similar descriptions that don't have a merchant linked
+                                                                                const currentDesc = txn.description?.toLowerCase() || '';
+                                                                                const descWords = currentDesc.split(/[\s\/\-#]+/).filter(w => w.length > 2);
+                                                                                const firstKeyWord = descWords[0];
+
+                                                                                const similarTxns = transactions.filter(t =>
+                                                                                    t.id !== txn.id &&
+                                                                                    !t.normalized_merchant_id &&
+                                                                                    t.description?.toLowerCase().includes(firstKeyWord)
+                                                                                );
+
+                                                                                // If we have a COA match, offer to apply it
+                                                                                if (matchedCoa) {
+                                                                                    const totalTxns = 1 + similarTxns.length;
+                                                                                    const applyCoaMsg = similarTxns.length > 0
+                                                                                        ? `Merchant "${merchant.normalized_name}" maps to "${matchedCoa.name}".\n\nFound ${similarTxns.length} other similar transaction(s).\n\nWould you like to apply this COA to all ${totalTxns} transactions?`
+                                                                                        : `Merchant "${merchant.normalized_name}" maps to "${matchedCoa.name}".\n\nWould you like to apply this COA?`;
+
+                                                                                    if (await confirm(applyCoaMsg, 'Apply COA')) {
+                                                                                        // Apply COA to current transaction
+                                                                                        await supabaseTransactionsDB.update(txn.id, {
+                                                                                            chart_of_account_id: matchedCoa.id
+                                                                                        });
+
+                                                                                        // Apply to similar transactions too
+                                                                                        for (const similarTxn of similarTxns) {
+                                                                                            await supabaseTransactionsDB.update(similarTxn.id, {
+                                                                                                normalized_merchant_id: merchant.id,
+                                                                                                chart_of_account_id: matchedCoa.id
+                                                                                            });
+                                                                                        }
+                                                                                    } else if (similarTxns.length > 0) {
+                                                                                        // User declined COA but ask about merchant linking
+                                                                                        if (await confirm(`Would you still like to assign "${merchant.normalized_name}" to the ${similarTxns.length} other similar transactions?`, 'Assign Merchant')) {
+                                                                                            for (const similarTxn of similarTxns) {
+                                                                                                await supabaseTransactionsDB.update(similarTxn.id, {
+                                                                                                    normalized_merchant_id: merchant.id
+                                                                                                });
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                } else if (similarTxns.length > 0) {
+                                                                                    // No COA match, just offer merchant linking
+                                                                                    if (await confirm(`Found ${similarTxns.length} other transaction(s) with similar descriptions.\n\nWould you like to also assign "${merchant.normalized_name}" to those transactions?`, 'Assign Merchant')) {
+                                                                                        for (const similarTxn of similarTxns) {
+                                                                                            await supabaseTransactionsDB.update(similarTxn.id, {
+                                                                                                normalized_merchant_id: merchant.id
+                                                                                            });
+                                                                                        }
+                                                                                    }
+                                                                                }
+
                                                                                 await loadTransactions();
                                                                             } catch (error) {
                                                                                 console.error('Error linking merchant:', error);
-                                                                                alert('Failed to link merchant');
+                                                                                await alert('Failed to link merchant', 'Error', 'error');
                                                                             }
                                                                         }}
                                                                         className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm border-b"
                                                                     >
                                                                         {merchant.normalized_name}
+                                                                        {merchant.category?.name && ` (${merchant.category.name})`}
                                                                         {merchant.id === txn.suggestedMerchantId && ' ⭐'}
                                                                     </button>
                                                                 ))
@@ -851,18 +964,46 @@ export const UncategorizedReceipts = () => {
                                                                 <button
                                                                     onClick={async () => {
                                                                         try {
+                                                                            const merchantName = merchantSearch[txn.id].trim();
                                                                             const newMerchant = await supabaseMerchantDB.add({
-                                                                                normalized_name: merchantSearch[txn.id].trim(),
+                                                                                normalized_name: merchantName,
                                                                                 aliases: [txn.description]
                                                                             });
                                                                             await supabaseTransactionsDB.update(txn.id, {
                                                                                 normalized_merchant_id: newMerchant.id
                                                                             });
                                                                             setShowMerchantDropdown({ ...showMerchantDropdown, [txn.id]: false });
+
+                                                                            // Find other transactions with similar descriptions
+                                                                            const currentDesc = txn.description?.toLowerCase() || '';
+                                                                            const descWords = currentDesc.split(/[\s\/\-#]+/).filter(w => w.length > 2);
+                                                                            const firstKeyWord = descWords[0];
+
+                                                                            const similarTxns = transactions.filter(t =>
+                                                                                t.id !== txn.id &&
+                                                                                !t.normalized_merchant_id &&
+                                                                                t.description?.toLowerCase().includes(firstKeyWord)
+                                                                            );
+
+                                                                            if (similarTxns.length > 0) {
+                                                                                const applyToOthers = await confirm(
+                                                                                    `Found ${similarTxns.length} other transaction(s) with similar descriptions.\n\nWould you like to also assign "${merchantName}" to those transactions?`,
+                                                                                    'Assign Merchant'
+                                                                                );
+
+                                                                                if (applyToOthers) {
+                                                                                    for (const similarTxn of similarTxns) {
+                                                                                        await supabaseTransactionsDB.update(similarTxn.id, {
+                                                                                            normalized_merchant_id: newMerchant.id
+                                                                                        });
+                                                                                    }
+                                                                                }
+                                                                            }
+
                                                                             await loadData();
                                                                         } catch (error) {
                                                                             console.error('Error creating merchant:', error);
-                                                                            alert('Failed to create merchant');
+                                                                            await alert('Failed to create merchant', 'Error', 'error');
                                                                         }
                                                                     }}
                                                                     className="w-full text-left px-3 py-2 bg-blue-50 hover:bg-blue-100 text-sm font-medium text-blue-700 border-t-2"
@@ -1021,33 +1162,54 @@ export const UncategorizedReceipts = () => {
                             );
 
                             // If there's a merchant, ask if they want to apply to other transactions
-                            if (merchantName) {
-                                // Count other transactions with the same merchant
-                                const otherTxns = transactions.filter(t =>
-                                    t.id !== editModalTxn.id &&
-                                    !t.splitReady &&
-                                    !t.defaultSplitRule &&
-                                    (t.merchant?.normalized_name === merchantName || t.suggestedMerchantName === merchantName)
-                                );
+                            const merchantId = editModalTxn.normalized_merchant_id;
+
+                            // Get merchant name from merchants list if we have the ID
+                            const resolvedMerchantName = merchantName ||
+                                (merchantId ? merchants.find(m => m.id === merchantId)?.normalized_name : null);
+
+                            if (resolvedMerchantName || merchantId) {
+                                // Count other transactions with the same merchant (by ID or name)
+                                const otherTxns = transactions.filter(t => {
+                                    if (t.id === editModalTxn.id) return false;
+                                    if (t.splitReady || t.defaultSplitRule) return false;
+
+                                    // Match by merchant ID first
+                                    if (merchantId && t.normalized_merchant_id === merchantId) return true;
+
+                                    // Match by merchant name
+                                    const txnMerchantName = t.merchant?.normalized_name || t.suggestedMerchantName ||
+                                        (t.normalized_merchant_id ? merchants.find(m => m.id === t.normalized_merchant_id)?.normalized_name : null);
+                                    if (resolvedMerchantName && txnMerchantName === resolvedMerchantName) return true;
+
+                                    return false;
+                                });
 
                                 if (otherTxns.length > 0) {
-                                    const applyToOthers = confirm(
-                                        `Found ${otherTxns.length} other transaction(s) from "${merchantName}".\n\n` +
-                                        `Would you like to suggest "${coaName}" for those transactions too?`
+                                    const displayName = resolvedMerchantName || 'this merchant';
+                                    const applyToOthers = await confirm(
+                                        `Found ${otherTxns.length} other transaction(s) from "${displayName}".\n\nWould you like to apply "${coaName}" to those transactions too?`,
+                                        'Apply to Other Transactions'
                                     );
 
                                     if (applyToOthers) {
-                                        // Update suggestions for other transactions with the same merchant
+                                        // Save COA to database for all matching transactions
+                                        for (const otherTxn of otherTxns) {
+                                            await supabaseTransactionsDB.update(otherTxn.id, {
+                                                chart_of_account_id: coaId
+                                            });
+                                        }
+
+                                        // Update local state for other transactions
                                         setTransactions(prev =>
                                             prev.map(t => {
                                                 if (t.id === editModalTxn.id) return t; // Already updated
-                                                if (t.splitReady || t.defaultSplitRule) return t; // Skip split transactions
 
-                                                const txnMerchantName = t.merchant?.normalized_name || t.suggestedMerchantName;
-                                                if (txnMerchantName === merchantName) {
-                                                    console.log('Updating suggestion for transaction:', t.id);
+                                                const isMatch = otherTxns.some(ot => ot.id === t.id);
+                                                if (isMatch) {
                                                     return {
                                                         ...t,
+                                                        chart_of_account_id: coaId,
                                                         suggestion: {
                                                             type: 'coa',
                                                             chartOfAccountId: coaId,
@@ -1065,7 +1227,7 @@ export const UncategorizedReceipts = () => {
                             setEditModalTxn(null);
                         } catch (error) {
                             console.error('Error saving COA:', error);
-                            alert('Failed to save Chart of Account');
+                            await alert('Failed to save Chart of Account', 'Error', 'error');
                         }
                     }}
                     onClose={() => setEditModalTxn(null)}
@@ -1083,6 +1245,9 @@ export const UncategorizedReceipts = () => {
                     onClose={() => setSplitModalTxn(null)}
                 />
             )}
+
+            {/* Confirm Modal */}
+            <ConfirmModalComponent />
         </div>
     );
 };
