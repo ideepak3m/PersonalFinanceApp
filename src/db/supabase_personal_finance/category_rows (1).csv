@@ -1,0 +1,20 @@
+id,name,description,is_split_enabled,inserted_at
+00847f3f-29a8-4aa8-a2f2-914f424e9f0f,Restaurant,Restaurant,false,2025-11-21 19:45:33+00
+16d81b30-3d65-4446-b9f9-ed378796307a,Home Services,Home Services,false,2025-11-21 19:40:02+00
+26be15d8-6ed0-4769-a600-ba6f14ab09b2,Travel and Hospitality,Travel & Hospitality,false,2025-11-21 19:41:01+00
+288e2bb9-cf33-41b2-a130-5f919c17000b,Home & Utility,Home goods and utility stores,true,2025-11-14 15:13:25.681213+00
+3711fffe-5829-4ca2-8790-8a6013ab60d2,Health & Wellness,Health & Wellness,false,2025-11-21 19:39:40+00
+389b162b-31b2-45e0-92f2-594b53d29b60,Automotive,Automotive,false,2025-11-21 19:38:11+00
+3f2a026a-3780-4ddd-ae25-0e46e5fd5050,Education,Education,false,2025-11-21 19:45:48+00
+56cd263b-b837-4751-ae52-1687de474e43,Big Box Store,Large retail and warehouse stores,true,2025-11-14 15:13:25.681213+00
+650dbcbc-a21c-42df-a37b-45095d130cc3,Fast Food,Quick service restaurants,false,2025-11-14 15:13:25.681213+00
+6e649068-b132-4848-9f37-2424b8b3d97c,AI and Internet,AI and Internet,false,2025-11-21 19:41:34+00
+815296c5-845f-4436-8b84-fe7ad5b34538,Beauty & Personal care,Beauty and Personal care,false,2025-11-21 19:38:49+00
+a1611378-5ee3-45c5-955e-68ad4a9ba84b,Legal & Financial,Legal and Financial,false,2025-11-21 19:40:30+00
+a3b2beb9-e044-495f-be5f-f9d542c0cc3b,Agriculture and Farming,Agriculture and Farming,false,2025-11-21 19:37:34+00
+c676183c-7dfb-484b-89c3-e7223944ddf7,Groceries,Grocery stores and supermarkets,false,2025-11-14 15:13:25.681213+00
+d721501e-d5e6-4646-a67a-3c6c40cb86b1,Dining / Café,Cafés and casual dining,false,2025-11-14 15:13:25.681213+00
+e3fed3f5-5b6a-4ee0-b9e1-cb832da049de,Entertainment,Entertainment,false,2025-11-21 19:47:58+00
+e589a4de-48db-41fe-a3db-0e90a336a7d6,Pharmacy & Health,Pharmacies and health stores,false,2025-11-14 15:13:25.681213+00
+ef968f38-6f12-48bc-8ea7-deb753b01d71,Clothing & Apparel,Clothing and apparel stores,true,2025-11-14 15:13:25.681213+00
+f45e6c75-e3da-4a41-bb8c-375f2e32e7e6,Electronics,Electronics,false,2025-11-21 19:39:12+00

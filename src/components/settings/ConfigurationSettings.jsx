@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Save } from 'lucide-react';
-import { supabaseSettingsDB } from '../../services/supabaseDatabase';
+import { supabaseSettingsDB } from '../../services/pocketbaseDatabase';
 
 const DEFAULT_CONFIG = {
     appName: 'Personal Finance',

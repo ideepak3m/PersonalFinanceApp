@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Upload } from 'lucide-react';
 import { TransactionUpload } from '../components/transactions/TransactionUpload';
 import BankAccountDetailsModal from '../components/accounts/BankAccountDetailsModal';
-import { supabaseAccountsDB, supabaseTransactionsDB, supabaseChartOfAccountsDB, supabaseImportStagingDB, supabaseImportRawDataDB } from '../services/supabaseDatabase';
+import { supabaseAccountsDB, supabaseTransactionsDB, supabaseChartOfAccountsDB, supabaseImportStagingDB, supabaseImportRawDataDB } from '../services/pocketbaseDatabase';
 import transactionService from '../services/transactionService';
 import Papa from 'papaparse';
 
@@ -366,9 +366,10 @@ export const AccountsDashboard = () => {
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                         {filteredAccounts.map((account) => {
-                            const count = uncategorizedCounts[account.id] || 0;
-                            const pendingCount = pendingImportCounts[account.id] || 0;
-                            const lastDate = lastTransactionDates[account.id];
+                            // Look up by both id and supabase_id since transactions may reference old Supabase IDs
+                            const count = uncategorizedCounts[account.id] || uncategorizedCounts[account.supabase_id] || 0;
+                            const pendingCount = pendingImportCounts[account.id] || pendingImportCounts[account.supabase_id] || 0;
+                            const lastDate = lastTransactionDates[account.id] || lastTransactionDates[account.supabase_id];
 
                             return (
                                 <tr key={account.id} className="hover:bg-gray-50">

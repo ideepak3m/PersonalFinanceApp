@@ -12,7 +12,7 @@ import {
     supabaseChartOfAccountsDB,
     supabaseMerchantDB,
     supabaseCategoryDB
-} from '../services/supabaseDatabase';
+} from '../services/pocketbaseDatabase';
 import { Search, Edit2, Trash2, Save, Split } from 'lucide-react';
 
 export const Transactions = () => {

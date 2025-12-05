@@ -1,0 +1,23 @@
+[
+    {
+        "name": "currencies",
+        "type": "base",
+        "schema": [
+            {
+                "name": "code",
+                "type": "text",
+                "required": true
+            },
+            {
+                "name": "name",
+                "type": "text",
+                "required": true
+            },
+            {
+                "name": "symbol",
+                "type": "text",
+                "required": false
+            }
+        ]
+    }
+]

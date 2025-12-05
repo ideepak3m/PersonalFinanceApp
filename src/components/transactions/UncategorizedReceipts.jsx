@@ -15,7 +15,7 @@ import {
     supabaseCategoryDB,
     supabaseTransactionSplitDB,
     supabaseMerchantSplitRulesDB
-} from '../../services/supabaseDatabase';
+} from '../../services/pocketbaseDatabase';
 import { transactionLogic } from '../../services/transactionBusinessLogic';
 
 export const UncategorizedReceipts = () => {
@@ -48,6 +48,35 @@ export const UncategorizedReceipts = () => {
 
     useEffect(() => {
         loadData();
+    }, [accountId]);
+
+    // Refresh data when the page becomes visible (e.g., when returning from Settings)
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && accountId) {
+                // Reload reference data (COA, categories, merchants) silently
+                Promise.all([
+                    supabaseChartOfAccountsDB.getAll(),
+                    supabaseCategoryDB.getAll(),
+                    supabaseMerchantDB.getAll()
+                ]).then(([coa, cats, merchs]) => {
+                    const sortedCoa = (coa || []).sort((a, b) =>
+                        (a.name || '').localeCompare(b.name || '')
+                    );
+                    setChartOfAccounts(sortedCoa);
+                    setCategories(cats || []);
+                    const uniqueMerchants = Array.from(
+                        new Map((merchs || []).map(m => [m.id, m])).values()
+                    ).sort((a, b) =>
+                        (a.normalized_name || '').localeCompare(b.normalized_name || '')
+                    );
+                    setMerchants(uniqueMerchants);
+                }).catch(console.error);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, [accountId]);
 
     const loadData = async () => {
@@ -88,7 +117,8 @@ export const UncategorizedReceipts = () => {
             setSuspenseAccount(suspense);
 
             // Load uncategorized transactions with enrichment
-            await loadTransactions(merchs || [], cats || [], sortedCoa, splitRules || []);
+            // Pass the account so we can use supabase_id for querying transactions
+            await loadTransactions(merchs || [], cats || [], sortedCoa, splitRules || [], acc);
 
         } catch (error) {
             console.error('Error loading data:', error);
@@ -98,14 +128,21 @@ export const UncategorizedReceipts = () => {
         }
     };
 
-    const loadTransactions = async (merchantsData = null, categoriesData = null, coaData = null, splitRulesData = null) => {
+    const loadTransactions = async (merchantsData = null, categoriesData = null, coaData = null, splitRulesData = null, accountData = null) => {
         try {
             // Get suspense account ID
             const coaList = coaData || chartOfAccounts;
             const suspense = coaList.find(c => c.name?.toLowerCase() === 'suspense');
             const suspenseId = suspense?.id;
+            // Also check supabase_id for suspense since transactions may reference old IDs
+            const suspenseSupabaseId = suspense?.supabase_id;
 
-            console.log('loadTransactions - suspenseId:', suspenseId, 'coaList length:', coaList?.length);
+            console.log('loadTransactions - suspenseId:', suspenseId, 'suspenseSupabaseId:', suspenseSupabaseId, 'coaList length:', coaList?.length);
+
+            // Use supabase_id if available since transactions reference old Supabase IDs
+            const acc = accountData || account;
+            const txnAccountId = acc?.supabase_id || accountId;
+            console.log('Querying transactions for account_id:', txnAccountId, '(account.supabase_id:', acc?.supabase_id, ', URL accountId:', accountId, ')');
 
             // Load transactions that are either:
             // 1. status = 'uncategorized' OR
@@ -119,12 +156,16 @@ export const UncategorizedReceipts = () => {
                         aliases
                     )
                 `)
-                .eq('account_id', accountId)
+                .eq('account_id', txnAccountId)
                 .order('date', { ascending: false });
 
             // Use OR filter to get both uncategorized and suspense transactions
+            // Check both PocketBase ID and supabase_id for suspense COA
             if (suspenseId) {
-                const orFilter = `status.eq.uncategorized,chart_of_account_id.eq.${suspenseId}`;
+                let orFilter = `status.eq.uncategorized,chart_of_account_id.eq.${suspenseId}`;
+                if (suspenseSupabaseId && suspenseSupabaseId !== suspenseId) {
+                    orFilter += `,chart_of_account_id.eq.${suspenseSupabaseId}`;
+                }
                 console.log('Using OR filter:', orFilter);
                 query = query.or(orFilter);
             } else {
@@ -343,7 +384,12 @@ export const UncategorizedReceipts = () => {
     // Helper to check if user manually selected a COA (not Suspense)
     const hasManualCoaSelection = (t) => {
         if (!t.chart_of_account_id) return false;
-        const coa = chartOfAccounts.find(c => c.id === t.chart_of_account_id);
+        // Look up COA by both id and supabase_id since transactions may reference old Supabase UUIDs
+        const coa = chartOfAccounts.find(c =>
+            c.id === t.chart_of_account_id || c.supabase_id === t.chart_of_account_id
+        );
+        // If COA not found, treat as no manual selection
+        if (!coa) return false;
         // If COA is Suspense, it's not a manual selection
         if (coa?.name?.toLowerCase() === 'suspense') return false;
         return true;
@@ -367,7 +413,11 @@ export const UncategorizedReceipts = () => {
                 // Include transactions with COA suggestions that are NOT Suspense
                 if (t.suggestion?.type === 'coa') {
                     const coaId = t.suggestion.chartOfAccountId;
-                    const coa = chartOfAccounts.find(c => c.id === coaId);
+                    // Look up by both id and supabase_id
+                    const coa = chartOfAccounts.find(c =>
+                        c.id === coaId || c.supabase_id === coaId
+                    );
+                    if (!coa) return false;
                     if (coa?.name?.toLowerCase() === 'suspense') return false;
                     return true;
                 }
@@ -784,11 +834,12 @@ export const UncategorizedReceipts = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y">
-                        {filteredTransactions.map((txn) => (
+                        {filteredTransactions.map((txn, index) => (
                             <tr key={txn.id} className="hover:bg-gray-50">
                                 <td className="px-4 py-3 text-center">
                                     <input
                                         type="checkbox"
+                                        id={`txn-checkbox-${txn.id}`}
                                         checked={selectedTxns.has(txn.id)}
                                         onChange={() => handleCheckboxChange(txn.id)}
                                         className="rounded"

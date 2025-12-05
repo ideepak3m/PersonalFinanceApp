@@ -1,0 +1,4 @@
+id,user_id,account_id,file_type,name,mapping_config,created_at,updated_at
+2200e88e-cc0e-4bdb-ba26-416f269a60fb,d293575a-98b3-4287-b308-01a4f6299080,4,qbo,CIBC_QBO_Format,"{""date"":""DTPOSTED"",""memo"":""MEMO"",""type"":""TRNTYPE"",""amount"":""TRNAMT"",""description"":""NAME""}",2025-11-26 16:52:23.37558+00,2025-11-26 16:52:23.37558+00
+33162bb2-4df7-4afb-ac1e-efe2f558cb05,d293575a-98b3-4287-b308-01a4f6299080,5,qfx,NBC,"{""date"":""DTPOSTED"",""memo"":""MEMO"",""type"":""TRNTYPE"",""amount"":""TRNAMT"",""description"":""NAME""}",2025-12-04 21:03:13.526737+00,2025-12-04 21:03:13.526737+00
+679c1b02-a41c-4b87-b051-53a3d005da79,d293575a-98b3-4287-b308-01a4f6299080,3,csv,BMO checking,"{""date"":""Date"",""amount"":""transaction"",""description"":""Description""}",2025-12-04 15:35:56.199003+00,2025-12-04 15:35:56.199003+00

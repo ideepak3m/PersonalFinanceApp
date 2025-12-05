@@ -1,7 +1,7 @@
 // src/pages/ImportMapper.jsx
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import {
     supabaseImportStagingDB,
     supabaseImportRawDataDB,
@@ -9,7 +9,7 @@ import {
     supabaseAccountsDB,
     supabaseTransactionsDB,
     supabaseChartOfAccountsDB
-} from '../services/supabaseDatabase';
+} from '../services/pocketbaseDatabase';
 
 export const ImportMapper = () => {
     const { accountId } = useParams();
@@ -93,6 +93,45 @@ export const ImportMapper = () => {
         } catch (error) {
             console.error('Error loading staging data:', error);
             alert('Failed to load file data');
+        }
+    };
+
+    // Delete a pending import file
+    const deleteStaging = async (stagingId, e) => {
+        e.stopPropagation(); // Prevent selecting the staging when clicking delete
+
+        if (!window.confirm('Are you sure you want to delete this pending import? This cannot be undone.')) {
+            return;
+        }
+
+        try {
+            // Delete raw data first (foreign key constraint)
+            await supabaseImportRawDataDB.deleteByStagingId(stagingId);
+
+            // Delete staging record
+            await supabaseImportStagingDB.delete(stagingId);
+
+            // Update local state
+            const updatedRecords = stagingRecords.filter(s => s.id !== stagingId);
+            setStagingRecords(updatedRecords);
+
+            // If we deleted the selected staging, select another one or clear
+            if (selectedStaging?.id === stagingId) {
+                if (updatedRecords.length > 0) {
+                    await selectStaging(updatedRecords[0]);
+                } else {
+                    setSelectedStaging(null);
+                    setRawData([]);
+                }
+            }
+
+            // If no more staging records, navigate back
+            if (updatedRecords.length === 0) {
+                navigate('/accounts');
+            }
+        } catch (error) {
+            console.error('Error deleting staging:', error);
+            alert('Failed to delete import: ' + error.message);
         }
     };
 
@@ -349,18 +388,29 @@ export const ImportMapper = () => {
                 <div className="col-span-3 space-y-2">
                     <h3 className="font-semibold text-sm text-gray-700 mb-2">Pending Imports:</h3>
                     {stagingRecords.map(staging => (
-                        <button
+                        <div
                             key={staging.id}
-                            onClick={() => selectStaging(staging)}
-                            className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedStaging?.id === staging.id
+                            className={`relative w-full text-left p-3 rounded-lg border transition-colors ${selectedStaging?.id === staging.id
                                 ? 'bg-blue-50 border-blue-300'
                                 : 'bg-white border-gray-200 hover:bg-gray-50'
                                 }`}
                         >
-                            <p className="font-medium text-sm truncate">{staging.file_name}</p>
-                            <p className="text-xs text-gray-500">{staging.row_count} rows</p>
-                            <p className="text-xs text-gray-400">{new Date(staging.uploaded_at).toLocaleDateString()}</p>
-                        </button>
+                            <button
+                                onClick={() => selectStaging(staging)}
+                                className="w-full text-left pr-8"
+                            >
+                                <p className="font-medium text-sm truncate">{staging.file_name}</p>
+                                <p className="text-xs text-gray-500">{staging.row_count} rows</p>
+                                <p className="text-xs text-gray-400">{new Date(staging.uploaded_at).toLocaleDateString()}</p>
+                            </button>
+                            <button
+                                onClick={(e) => deleteStaging(staging.id, e)}
+                                className="absolute top-3 right-2 p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                title="Delete this import"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
                     ))}
                 </div>
 

@@ -4,7 +4,7 @@ import { PortfolioCard } from '../components/analytics/PortfolioCard';
 import { CategoryChart } from '../components/analytics/CategoryChart';
 import { DollarSign, TrendingUp, PiggyBank } from 'lucide-react';
 import { calculateTotalBalance } from '../utils/calculations';
-import { supabaseAccountsDB, supabaseTransactionsDB } from '../services/supabaseDatabase';
+import { supabaseAccountsDB, supabaseTransactionsDB } from '../services/pocketbaseDatabase';
 
 export const Analytics = () => {
     const [accounts, setAccounts] = useState([]);

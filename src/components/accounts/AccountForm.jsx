@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { ACCOUNT_TYPES, ACCOUNT_CATEGORIES } from '../../utils/constants';
 
+// Common currencies
+const CURRENCIES = [
+    { value: 'CAD', label: 'CAD - Canadian Dollar' },
+    { value: 'USD', label: 'USD - US Dollar' },
+    { value: 'EUR', label: 'EUR - Euro' },
+    { value: 'GBP', label: 'GBP - British Pound' },
+    { value: 'INR', label: 'INR - Indian Rupee' },
+];
+
 export const AccountForm = ({ onSubmit, initialData, onCancel }) => {
     const [formData, setFormData] = useState({
         name: '',
         country: 'canada',
         type: 'savings',
         account_category: 'general',
+        currency: 'CAD',
         balance: '',
         institution: '',
         ...initialData
@@ -30,6 +40,7 @@ export const AccountForm = ({ onSubmit, initialData, onCancel }) => {
                 country: 'canada',
                 type: 'savings',
                 account_category: 'general',
+                currency: 'CAD',
                 balance: '',
                 institution: ''
             });
@@ -117,6 +128,23 @@ export const AccountForm = ({ onSubmit, initialData, onCancel }) => {
                     >
                         {Object.entries(ACCOUNT_CATEGORIES).map(([key, value]) => (
                             <option key={key} value={value}>{key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Currency *
+                    </label>
+                    <select
+                        name="currency"
+                        value={formData.currency}
+                        onChange={handleChange}
+                        required
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                        {CURRENCIES.map(c => (
+                            <option key={c.value} value={c.value}>{c.label}</option>
                         ))}
                     </select>
                 </div>

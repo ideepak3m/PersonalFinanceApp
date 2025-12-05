@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Upload, Table, CheckCircle, AlertTriangle, Eye, Download, RefreshCw, FileText, Sparkles, Key, Plus, Database } from 'lucide-react';
 import { extractTablesWithPython, checkPythonServiceHealth } from '../services/pythonBackendService';
 import { extractTablesWithVision, getClaudeApiKey, setClaudeApiKey } from '../services/pdfVisionExtractor';
-import { saveCompleteExtraction, getInvestmentAccounts, getInvestmentManagers, createInvestmentManager, findAccountByNumber, getHoldingsForAccount, getCashTransactionsForAccount, getInvestmentTransactionsForAccount } from '../services/investmentDataService';
+import { saveCompleteExtraction, getInvestmentAccounts, getInvestmentManagers, createInvestmentManager, findAccountByNumber, getHoldingsForAccount, getCashTransactionsForAccount, getInvestmentTransactionsForAccount } from '../services/pocketbaseInvestmentDataService';
 
 const RealPDFParser = () => {
     const [file, setFile] = useState(null);

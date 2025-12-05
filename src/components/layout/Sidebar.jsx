@@ -20,7 +20,8 @@ import {
     Users,
     Building2,
     FolderOpen,
-    Target
+    Target,
+    BookOpen
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -104,6 +105,7 @@ export const Sidebar = () => {
             children: [
                 { path: '/settings/profile', label: 'Profile', icon: Users },
                 { path: '/settings/retirement', label: 'Retirement Info', icon: Target },
+                { path: '/settings/chart-of-accounts', label: 'Chart of Accounts', icon: BookOpen },
                 { path: '/subscriptions', label: 'Subscriptions', icon: Receipt },
                 { path: '/split-rules', label: 'Split Rules', icon: FolderOpen },
             ]

@@ -1,0 +1,5 @@
+id,user_id,country,account_category,provider_id,account_number,name,currency,created_at,updated_at,balance,institution,type
+2,d293575a-98b3-4287-b308-01a4f6299080,canada,general,,,BMO Personal USD,CAD,2025-11-14 02:50:07.31496+00,2025-12-04 19:11:25.917526+00,150,BMO,checking
+3,d293575a-98b3-4287-b308-01a4f6299080,canada,general,,,BMO Chequing,CAD,2025-11-14 02:50:38.524241+00,2025-12-04 19:11:25.917526+00,1945.56,BMO,checking
+4,d293575a-98b3-4287-b308-01a4f6299080,canada,credit_card,,,CIBC,CAD,2025-11-16 04:15:02.195446+00,2025-12-04 19:11:25.917526+00,0,CIBC Costco,credit_card
+5,d293575a-98b3-4287-b308-01a4f6299080,Canada,Bank,,,NBC LOC,CAD,2025-12-04 21:00:36.156145+00,2025-12-04 21:00:36.156145+00,0,,Chequing

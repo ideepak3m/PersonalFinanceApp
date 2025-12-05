@@ -1,0 +1,3 @@
+id,user_id,name,manager_type,description,website,contact_name,contact_email,contact_phone,created_at,updated_at
+675ac61c-c3bd-4314-a1d3-179c3a66b0cd,d293575a-98b3-4287-b308-01a4f6299080,RBC,Advisor,,,,,,2025-12-02 21:24:35.443778+00,2025-12-02 21:24:35.443778+00
+a0f5ef40-53b9-4ecc-8ff3-5c524e3b4743,d293575a-98b3-4287-b308-01a4f6299080,Olmypia Trust,Custodian,,,,,,2025-12-02 17:00:02.822544+00,2025-12-02 17:00:02.822544+00

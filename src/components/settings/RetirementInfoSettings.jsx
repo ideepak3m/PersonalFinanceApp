@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabaseGovernmentBenefitsDB } from '../../services/supabaseDatabase';
+import { supabaseGovernmentBenefitsDB } from '../../services/pocketbaseDatabase';
 import { CPPContributionCalculator } from './CPPContributionCalculator';
 import {
     Landmark,

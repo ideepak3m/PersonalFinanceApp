@@ -1,0 +1,4 @@
+id,user_id,account_id,file_name,file_type,column_names,row_count,status,mapping_id,error_message,uploaded_at,imported_at
+cc4466dd-2166-4031-a2ff-5cb3ed093b9f,d293575a-98b3-4287-b308-01a4f6299080,5,2025-12-04-155236.qfx,qfx,"[""TRNTYPE"",""DTPOSTED"",""TRNAMT"",""FITID"",""NAME"",""MEMO""]",228,imported,,,2025-12-04 21:01:53.565077+00,2025-12-04 21:03:04.153+00
+dd61c6b6-1186-4e9e-8cf4-e63b4adbef4e,d293575a-98b3-4287-b308-01a4f6299080,3,BMO checking 2025.csv,csv,"[""Date"",""Description"",""Money Out"",""Money In"",""transaction"",""Balance"",""""]",134,imported,,,2025-12-04 15:30:06.934165+00,2025-12-04 15:35:46.599+00
+f1b43ec8-5c74-4e5d-b5ac-0cd542ffde17,d293575a-98b3-4287-b308-01a4f6299080,4,cibc (3).qbo,qbo,"[""TRNTYPE"",""DTPOSTED"",""TRNAMT"",""FITID"",""NAME"",""MEMO""]",542,imported,,,2025-12-03 20:13:22.849383+00,2025-12-03 20:13:51.495+00

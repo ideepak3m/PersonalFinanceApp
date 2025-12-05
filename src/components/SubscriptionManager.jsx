@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
+import {
+    supabaseMerchantDB,
+    supabaseSubscriptionHistoryDB
+} from '../services/pocketbaseDatabase';
 import './SubscriptionManager.css';
 
 const SubscriptionManager = () => {
+    const { user } = useAuth();
     const [subscriptions, setSubscriptions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'active', 'inactive'
@@ -22,17 +27,14 @@ const SubscriptionManager = () => {
     const loadSubscriptions = async () => {
         try {
             setLoading(true);
-            const { data: { user } } = await supabase.auth.getUser();
 
-            const { data, error } = await supabase
-                .from('merchant')
-                .select('*')
-                .eq('user_id', user.id)
-                .eq('is_subscription', true)
-                .order('normalized_name');
+            const allMerchants = await supabaseMerchantDB.getAll();
+            // Filter subscriptions and sort by name
+            const data = (allMerchants || [])
+                .filter(m => m.is_subscription)
+                .sort((a, b) => (a.normalized_name || '').localeCompare(b.normalized_name || ''));
 
-            if (error) throw error;
-            setSubscriptions(data || []);
+            setSubscriptions(data);
         } catch (error) {
             console.error('Error loading subscriptions:', error);
             alert('Failed to load subscriptions');
@@ -104,7 +106,6 @@ const SubscriptionManager = () => {
         }
 
         try {
-            const { data: { user } } = await supabase.auth.getUser();
             const newStatus = actionType === 'activate';
             const now = new Date().toISOString();
 
@@ -120,26 +121,17 @@ const SubscriptionManager = () => {
                 merchantUpdate.subscription_reactivated_at = now;
             }
 
-            const { error: merchantError } = await supabase
-                .from('merchant')
-                .update(merchantUpdate)
-                .eq('id', selectedSubscription.id);
-
-            if (merchantError) throw merchantError;
+            await supabaseMerchantDB.update(selectedSubscription.id, merchantUpdate);
 
             // Insert into subscription_history
-            const { error: historyError } = await supabase
-                .from('subscription_history')
-                .insert({
-                    merchant_id: selectedSubscription.id,
-                    user_id: user.id,
-                    action: actionType === 'activate' ? 'activated' : 'deactivated',
-                    action_date: now,
-                    reason: reason.trim(),
-                    notes: notes.trim() || null
-                });
-
-            if (historyError) throw historyError;
+            await supabaseSubscriptionHistoryDB.add({
+                merchant_id: selectedSubscription.id,
+                user_id: user.id,
+                action: actionType === 'activate' ? 'activated' : 'deactivated',
+                action_date: now,
+                reason: reason.trim(),
+                notes: notes.trim() || null
+            });
 
             // Refresh subscriptions
             await loadSubscriptions();
@@ -153,14 +145,13 @@ const SubscriptionManager = () => {
 
     const loadHistory = async (merchantId) => {
         try {
-            const { data, error } = await supabase
-                .from('subscription_history')
-                .select('*')
-                .eq('merchant_id', merchantId)
-                .order('action_date', { ascending: false });
+            const allHistory = await supabaseSubscriptionHistoryDB.getAll();
+            // Filter by merchant_id and sort by date descending
+            const data = (allHistory || [])
+                .filter(h => h.merchant_id === merchantId)
+                .sort((a, b) => new Date(b.action_date) - new Date(a.action_date));
 
-            if (error) throw error;
-            setHistory(data || []);
+            setHistory(data);
             setShowHistory(true);
         } catch (error) {
             console.error('Error loading history:', error);

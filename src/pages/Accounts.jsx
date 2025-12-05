@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AccountForm } from '../components/accounts/AccountForm';
 import { AccountList } from '../components/accounts/AccountList';
-import { supabaseAccountsDB } from '../services/supabaseDatabase';
+import { supabaseAccountsDB } from '../services/pocketbaseDatabase';
 
 export const Accounts = () => {
     const [accounts, setAccounts] = useState([]);

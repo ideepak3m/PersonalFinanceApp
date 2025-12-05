@@ -8,7 +8,7 @@ import {
     getLatestMarketValues,
     getInvestmentManagers,
     updateInvestmentAccount
-} from '../services/investmentDataService';
+} from '../services/pocketbaseInvestmentDataService';
 import InvestmentAccountDetailsModal from '../components/investments/InvestmentAccountDetailsModal';
 
 export const InvestmentAccountsDashboard = () => {

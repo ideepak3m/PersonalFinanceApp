@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../services/supabaseClient';
+import {
+    supabaseTransactionsDB,
+    supabaseCategoryDB,
+    supabaseChartOfAccountsDB
+} from '../../services/pocketbaseDatabase';
 import {
     TrendingUp,
     Calendar,
@@ -42,50 +46,67 @@ export const IncomeAnalysis = () => {
         setError(null);
 
         try {
+            // Load categories and chart of accounts first (for lookups)
+            const cats = await supabaseCategoryDB.getAll();
+            const coa = await supabaseChartOfAccountsDB.getAll();
+
+            // Create lookup maps using supabase_id (original UUID) as the key
+            // This is needed because transaction foreign keys reference original Supabase UUIDs
+            const categoryMap = {};
+            (cats || []).forEach(c => {
+                if (c.supabase_id) categoryMap[c.supabase_id] = c;
+                categoryMap[c.id] = c;
+            });
+
+            const coaMap = {};
+            (coa || []).forEach(c => {
+                if (c.supabase_id) coaMap[c.supabase_id] = c;
+                coaMap[c.id] = c;
+            });
+
+            // Load transactions for the selected year
             const startDate = `${selectedYear}-01-01`;
             const endDate = `${selectedYear}-12-31`;
 
-            const { data: txns, error: txnError } = await supabase
-                .from('transactions')
-                .select(`
-                    id,
-                    date,
-                    amount,
-                    raw_merchant_name,
-                    description,
-                    category_id,
-                    chart_of_account_id,
-                    category:category_id(id, name),
-                    chart_of_account:chart_of_account_id(id, name, account_type)
-                `)
-                .eq('user_id', user.id)
-                .gte('date', startDate)
-                .lte('date', endDate)
-                .order('date', { ascending: false });
+            const allTxns = await supabaseTransactionsDB.getAll();
 
-            if (txnError) throw txnError;
-
-            // Filter for income transactions (positive amounts or income categories)
-            const income = (txns || []).filter(t => {
-                const amount = parseFloat(t.amount);
-                const categoryName = (t.category?.name || t.chart_of_account?.name || '').toLowerCase();
-                const merchantName = (t.raw_merchant_name || '').toLowerCase();
-                const description = (t.description || '').toLowerCase();
-
-                // Check if it's income based on:
-                // 1. Positive amount
-                // 2. Category type is 'income'
-                // 3. Category name contains income indicators
-                const isIncome = amount > 0 ||
-                    t.chart_of_account?.account_type === 'income' ||
-                    INCOME_INDICATORS.some(ind =>
-                        categoryName.includes(ind) ||
-                        merchantName.includes(ind) ||
-                        description.includes(ind)
-                    );
-
-                return isIncome && amount !== 0;
+            // Filter by date range
+            const txns = (allTxns || []).filter(t => {
+                return t.date >= startDate && t.date <= endDate;
             });
+
+            // Enrich transactions with category and COA data
+            const enrichedTxns = txns.map(t => ({
+                ...t,
+                category: categoryMap[t.category_id] || null,
+                chart_of_account: coaMap[t.chart_of_account_id] || null
+            }));
+
+            // Sort by date descending
+            enrichedTxns.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            // Debug: Log account types to understand data
+            const accountTypes = [...new Set(enrichedTxns.map(t => t.chart_of_account?.account_type))];
+            console.log('Income - Available account_types:', accountTypes);
+            console.log('Income - Total transactions loaded:', enrichedTxns.length);
+
+            // Filter for income transactions - only include those with Income account type
+            // Exclude Suspense, Transfer, and any non-income account types
+            const income = enrichedTxns.filter(t => {
+                const accountType = t.chart_of_account?.account_type?.toLowerCase();
+                const accountName = t.chart_of_account?.name?.toLowerCase();
+
+                // Exclude Suspense account
+                if (accountName === 'suspense') return false;
+
+                // Exclude Transfer type (e.g., Credit Card Payments)
+                if (accountType === 'transfer') return false;
+
+                // Only include Income account type
+                return accountType === 'income';
+            });
+
+            console.log('Income - Filtered income transactions:', income.length);
 
             setTransactions(income);
         } catch (err) {
@@ -111,10 +132,11 @@ export const IncomeAnalysis = () => {
         const totalIncome = filteredTxns.reduce((sum, t) =>
             sum + Math.abs(parseFloat(t.amount) || 0), 0);
 
-        // By source (category/merchant)
+        // By source - use chart_of_account name for income categorization
         const bySource = {};
         filteredTxns.forEach(t => {
-            const source = t.category?.name || t.chart_of_account?.name || t.raw_merchant_name || 'Other Income';
+            // For income report, use chart_of_account name as the source
+            const source = t.chart_of_account?.name || t.category?.name || 'Other Income';
             bySource[source] = (bySource[source] || 0) + Math.abs(parseFloat(t.amount) || 0);
         });
 
@@ -351,24 +373,28 @@ export const IncomeAnalysis = () => {
                         <BarChart3 className="w-5 h-5 text-green-400" />
                         Monthly Income
                     </h2>
-                    <div className="flex items-end justify-between gap-1 h-48">
-                        {metrics.byMonth.map((amount, idx) => (
-                            <div key={idx} className="flex-1 flex flex-col items-center">
-                                <div
-                                    className={`w-full rounded-t transition-all cursor-pointer hover:opacity-80 ${selectedMonth === idx ? 'bg-green-500' : 'bg-green-500/60'
-                                        }`}
-                                    style={{
-                                        height: `${(amount / maxMonthlyIncome) * 100}%`,
-                                        minHeight: amount > 0 ? '4px' : '0'
-                                    }}
-                                    onClick={() => setSelectedMonth(selectedMonth === idx ? null : idx)}
-                                    title={`${MONTHS[idx]}: ${formatCurrency(amount)}`}
-                                />
-                                <span className="text-xs text-gray-500 mt-1">
-                                    {MONTHS[idx].substring(0, 1)}
-                                </span>
-                            </div>
-                        ))}
+                    <div className="flex items-end justify-between gap-1" style={{ height: '192px' }}>
+                        {metrics.byMonth.map((amount, idx) => {
+                            const barHeight = maxMonthlyIncome > 0
+                                ? Math.max((amount / maxMonthlyIncome) * 160, amount > 0 ? 4 : 0)
+                                : 0;
+                            return (
+                                <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full">
+                                    <div
+                                        className={`w-full rounded-t transition-all cursor-pointer hover:opacity-80 ${selectedMonth === idx ? 'bg-green-500' : 'bg-green-500/60'
+                                            }`}
+                                        style={{
+                                            height: `${barHeight}px`,
+                                        }}
+                                        onClick={() => setSelectedMonth(selectedMonth === idx ? null : idx)}
+                                        title={`${MONTHS[idx]}: ${formatCurrency(amount)}`}
+                                    />
+                                    <span className="text-xs text-gray-500 mt-1">
+                                        {MONTHS[idx].substring(0, 1)}
+                                    </span>
+                                </div>
+                            );
+                        })}
                     </div>
                     <div className="mt-4 text-center">
                         <p className="text-sm text-gray-400">

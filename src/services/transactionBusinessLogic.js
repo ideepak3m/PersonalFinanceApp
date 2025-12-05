@@ -6,7 +6,7 @@ import {
     supabaseTransactionSplitDB,
     supabaseMerchantDB,
     supabaseCategoryDB
-} from './supabaseDatabase';
+} from './pocketbaseDatabase';
 
 class TransactionBusinessLogic {
     /**

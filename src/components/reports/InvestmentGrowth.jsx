@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../services/supabaseClient';
+import {
+    supabaseInvestmentAccountsDB,
+    supabaseHoldingsDB
+} from '../../services/pocketbaseDatabase';
 import {
     TrendingUp,
     Calendar,
@@ -35,34 +38,29 @@ export const InvestmentGrowth = () => {
 
         try {
             // Load accounts
-            const { data: accts, error: acctError } = await supabase
-                .from('investment_accounts')
-                .select('*')
-                .eq('user_id', user.id);
-
-            if (acctError) throw acctError;
+            const accts = await supabaseInvestmentAccountsDB.getAll();
             setAccounts(accts || []);
 
-            // Load latest holdings for each account
-            const { data: holdingsData, error: holdingsError } = await supabase
-                .from('holdings')
-                .select(`
-                    *,
-                    investment_accounts!inner(
-                        id,
-                        account_type,
-                        institution,
-                        display_name
-                    )
-                `)
-                .eq('user_id', user.id)
-                .order('as_of_date', { ascending: false });
+            // Create accounts lookup map using supabase_id (original UUID) as the key
+            // This is needed because holdings foreign keys reference original Supabase UUIDs
+            const accountsMap = {};
+            (accts || []).forEach(a => {
+                if (a.supabase_id) accountsMap[a.supabase_id] = a;
+                accountsMap[a.id] = a;
+            });
 
-            if (holdingsError) throw holdingsError;
+            // Load all holdings
+            const holdingsData = await supabaseHoldingsDB.getAll();
+
+            // Enrich holdings with account data and sort by date
+            const enrichedHoldings = (holdingsData || []).map(h => ({
+                ...h,
+                investment_accounts: accountsMap[h.account_id] || null
+            })).sort((a, b) => new Date(b.as_of_date) - new Date(a.as_of_date));
 
             // Get latest holdings per symbol per account
             const latestHoldings = {};
-            (holdingsData || []).forEach(h => {
+            enrichedHoldings.forEach(h => {
                 const key = `${h.account_id}-${h.symbol}`;
                 if (!latestHoldings[key]) {
                     latestHoldings[key] = h;

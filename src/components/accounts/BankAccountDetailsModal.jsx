@@ -1,7 +1,7 @@
 // src/components/accounts/BankAccountDetailsModal.jsx
 import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, Receipt, PieChart, Calendar, Filter, ChevronDown, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
-import { supabaseTransactionsDB } from '../../services/supabaseDatabase';
+import { supabaseTransactionsDB } from '../../services/pocketbaseDatabase';
 
 const BankAccountDetailsModal = ({ account, onClose }) => {
     const [activeTab, setActiveTab] = useState('transactions');
@@ -141,8 +141,8 @@ const BankAccountDetailsModal = ({ account, onClose }) => {
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-colors ${activeTab === tab.id
-                                            ? 'border-blue-600 text-blue-600 bg-white'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                                        ? 'border-blue-600 text-blue-600 bg-white'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700'
                                         }`}
                                 >
                                     <Icon className="w-4 h-4" />
@@ -260,9 +260,9 @@ const BankAccountDetailsModal = ({ account, onClose }) => {
                                                         </td>
                                                         <td className="px-4 py-3">
                                                             <span className={`px-2 py-1 text-xs rounded ${txn.status === 'categorized' ? 'bg-green-100 text-green-800' :
-                                                                    txn.status === 'uncategorized' ? 'bg-yellow-100 text-yellow-800' :
-                                                                        txn.status === 'split' ? 'bg-purple-100 text-purple-800' :
-                                                                            'bg-gray-100 text-gray-800'
+                                                                txn.status === 'uncategorized' ? 'bg-yellow-100 text-yellow-800' :
+                                                                    txn.status === 'split' ? 'bg-purple-100 text-purple-800' :
+                                                                        'bg-gray-100 text-gray-800'
                                                                 }`}>
                                                                 {txn.status}
                                                             </span>

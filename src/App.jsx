@@ -25,6 +25,7 @@ import PDFTableReader from './pdfTableReader/tableReader';
 // Phase 3 Components - Settings
 import { UserProfileSettings } from './components/settings/UserProfileSettings';
 import { RetirementInfoSettings } from './components/settings/RetirementInfoSettings';
+import { ChartOfAccounts } from './components/settings/ChartOfAccounts';
 
 // Phase 3 Components - Reports
 import { ExpenseAnalysis } from './components/reports/ExpenseAnalysis';
@@ -79,6 +80,7 @@ function App() {
                           <Route path="settings" element={<Settings />} />
                           <Route path="settings/profile" element={<UserProfileSettings />} />
                           <Route path="settings/retirement" element={<RetirementInfoSettings />} />
+                          <Route path="settings/chart-of-accounts" element={<ChartOfAccounts />} />
                           <Route path="subscriptions" element={<SubscriptionManager />} />
                           <Route path="split-rules" element={<MerchantSplitRules />} />
 

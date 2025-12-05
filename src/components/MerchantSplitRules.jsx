@@ -5,7 +5,7 @@ import {
     supabaseMerchantSplitRulesDB,
     supabaseChartOfAccountsDB,
     supabaseMerchantDB
-} from '../services/supabaseDatabase';
+} from '../services/pocketbaseDatabase';
 import './MerchantSplitRules.css';
 
 export const MerchantSplitRules = () => {

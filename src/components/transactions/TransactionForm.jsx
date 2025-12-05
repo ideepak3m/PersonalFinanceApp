@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../services/supabaseClient';
+import { supabaseTransactionsDB } from '../../services/pocketbaseDatabase';
 import {
     Receipt,
     DollarSign,
@@ -100,25 +100,10 @@ export const TransactionForm = ({
             let result;
             if (transaction?.id) {
                 // Update existing
-                const { data, error: updateError } = await supabase
-                    .from('transactions')
-                    .update(transactionData)
-                    .eq('id', transaction.id)
-                    .select()
-                    .single();
-
-                if (updateError) throw updateError;
-                result = data;
+                result = await supabaseTransactionsDB.update(transaction.id, transactionData);
             } else {
                 // Insert new
-                const { data, error: insertError } = await supabase
-                    .from('transactions')
-                    .insert(transactionData)
-                    .select()
-                    .single();
-
-                if (insertError) throw insertError;
-                result = data;
+                result = await supabaseTransactionsDB.add(transactionData);
             }
 
             if (onSave) {

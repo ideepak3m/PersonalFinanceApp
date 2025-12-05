@@ -1,7 +1,11 @@
 // src/components/investments/InvestmentAccountDetailsModal.jsx
 import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, Receipt, PieChart, Calendar, Filter, Download, ChevronDown, ChevronUp, Building2, Clock, Plus, Minus, DollarSign } from 'lucide-react';
-import { supabase } from '../../services/supabaseClient';
+import {
+    supabaseHoldingsDB,
+    supabaseInvestmentTransactionsDB,
+    supabaseCashTransactionsDB
+} from '../../services/pocketbaseDatabase';
 
 const InvestmentAccountDetailsModal = ({ account, onClose }) => {
     const [activeTab, setActiveTab] = useState('holdings');
@@ -22,38 +26,29 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
         try {
             setLoading(true);
 
-            // Load holdings
-            const { data: holdingsData, error: holdingsError } = await supabase
-                .from('holdings')
-                .select('*')
-                .eq('account_id', account.id)
-                .order('as_of_date', { ascending: false });
+            // Use supabase_id for matching since holdings reference old Supabase UUIDs
+            const accountId = account.supabase_id || account.id;
 
-            if (!holdingsError) {
-                setHoldings(holdingsData || []);
-            }
+            // Load holdings for this account
+            const allHoldings = await supabaseHoldingsDB.getAll();
+            const holdingsData = (allHoldings || []).filter(h =>
+                h.account_id === accountId || h.account_id === account.id
+            ).sort((a, b) => new Date(b.as_of_date) - new Date(a.as_of_date));
+            setHoldings(holdingsData);
 
-            // Load investment transactions
-            const { data: txnData, error: txnError } = await supabase
-                .from('investment_transactions')
-                .select('*')
-                .eq('account_id', account.id)
-                .order('transaction_date', { ascending: false });
+            // Load investment transactions for this account
+            const allTxns = await supabaseInvestmentTransactionsDB.getAll();
+            const txnData = (allTxns || []).filter(t =>
+                t.account_id === accountId || t.account_id === account.id
+            ).sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
+            setTransactions(txnData);
 
-            if (!txnError) {
-                setTransactions(txnData || []);
-            }
-
-            // Load cash transactions (fees, etc.)
-            const { data: cashData, error: cashError } = await supabase
-                .from('cash_transactions')
-                .select('*')
-                .eq('account_id', account.id)
-                .order('transaction_date', { ascending: false });
-
-            if (!cashError) {
-                setCashTransactions(cashData || []);
-            }
+            // Load cash transactions (fees, etc.) for this account
+            const allCashTxns = await supabaseCashTransactionsDB.getAll();
+            const cashData = (allCashTxns || []).filter(t =>
+                t.account_id === accountId || t.account_id === account.id
+            ).sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
+            setCashTransactions(cashData);
 
         } catch (error) {
             console.error('Error loading account data:', error);

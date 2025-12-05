@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { KnowledgeCard } from '../components/knowledge/KnowledgeCard';
-import { supabaseKnowledgeDB } from '../services/supabaseDatabase';
+import { supabaseKnowledgeDB } from '../services/pocketbaseDatabase';
 
 export const Knowledge = () => {
     const [resources, setResources] = useState([]);

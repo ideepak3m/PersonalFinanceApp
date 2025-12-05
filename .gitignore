@@ -31,3 +31,8 @@ dist-ssr
 
 # Python backend (moved to separate repository)
 python-backend/
+
+# PocketBase
+pocketbase/pb_data/
+pocketbase/pocketbase.exe
+pocketbase/pocketbase.zip

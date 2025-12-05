@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../services/supabaseClient';
+import {
+    supabaseTransactionsDB,
+    supabaseCategoryDB,
+    supabaseChartOfAccountsDB
+} from '../../services/pocketbaseDatabase';
 import {
     PieChart,
     BarChart3,
@@ -49,70 +53,81 @@ export const ExpenseAnalysis = () => {
         setError(null);
 
         try {
+            console.log('ExpenseAnalysis: Starting to load data...');
+
+            // Load categories and chart of accounts first (for lookups)
+            const cats = await supabaseCategoryDB.getAll();
+            console.log('ExpenseAnalysis: Categories loaded:', cats?.length);
+            setCategories(cats || []);
+
+            const coa = await supabaseChartOfAccountsDB.getAll();
+            console.log('ExpenseAnalysis: Chart of Accounts loaded:', coa?.length);
+            // Sort COA alphabetically by name
+            const sortedCoa = (coa || []).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            setChartOfAccounts(sortedCoa);
+
+            // Create lookup maps using supabase_id (original UUID) as the key
+            // This is needed because transaction foreign keys reference original Supabase UUIDs
+            const categoryMap = {};
+            (cats || []).forEach(c => {
+                if (c.supabase_id) categoryMap[c.supabase_id] = c;
+                categoryMap[c.id] = c; // Also map by PocketBase ID for new records
+            });
+
+            const coaMap = {};
+            (coa || []).forEach(c => {
+                if (c.supabase_id) coaMap[c.supabase_id] = c;
+                coaMap[c.id] = c; // Also map by PocketBase ID for new records
+            });
+
             // Load transactions for the selected year
             const startDate = `${selectedYear}-01-01`;
             const endDate = `${selectedYear}-12-31`;
+            console.log('ExpenseAnalysis: Loading transactions for', startDate, 'to', endDate);
 
-            const { data: txns, error: txnError } = await supabase
-                .from('transactions')
-                .select(`
-                    id,
-                    date,
-                    amount,
-                    raw_merchant_name,
-                    description,
-                    category_id,
-                    chart_of_account_id,
-                    category:category_id(id, name),
-                    chart_of_account:chart_of_account_id(id, name, account_type)
-                `)
-                .eq('user_id', user.id)
-                .gte('date', startDate)
-                .lte('date', endDate)
-                .order('date', { ascending: false });
+            const allTxns = await supabaseTransactionsDB.getAll();
+            console.log('ExpenseAnalysis: All transactions loaded:', allTxns?.length);
 
-            if (txnError) throw txnError;
+            // Filter by date range and user
+            const txns = (allTxns || []).filter(t => {
+                return t.date >= startDate && t.date <= endDate;
+            });
+
+            // Enrich transactions with category and COA data
+            const enrichedTxns = txns.map(t => ({
+                ...t,
+                category: categoryMap[t.category_id] || null,
+                chart_of_account: coaMap[t.chart_of_account_id] || null
+            }));
+
+            // Sort by date descending
+            enrichedTxns.sort((a, b) => new Date(b.date) - new Date(a.date));
 
             // Debug: Log account types to understand data
-            const accountTypes = [...new Set((txns || []).map(t => t.chart_of_account?.account_type))];
+            const accountTypes = [...new Set(enrichedTxns.map(t => t.chart_of_account?.account_type))];
             console.log('Available account_types:', accountTypes);
-            console.log('Total transactions loaded:', txns?.length);
-            console.log('Sample transaction:', txns?.[0]);
+            console.log('Total transactions loaded:', enrichedTxns.length);
+            console.log('Sample transaction:', enrichedTxns[0]);
 
             // Filter for expense transactions - only include those with Expense account type
-            // Exclude Suspense and any non-expense account types
-            const expenses = (txns || []).filter(t => {
-                const accountType = t.chart_of_account?.account_type;
+            // Exclude Suspense, Transfer, and any non-expense account types
+            const expenses = enrichedTxns.filter(t => {
+                const accountType = t.chart_of_account?.account_type?.toLowerCase();
                 const accountName = t.chart_of_account?.name?.toLowerCase();
 
                 // Exclude Suspense account
                 if (accountName === 'suspense') return false;
 
+                // Exclude Transfer type (e.g., Credit Card Payments)
+                if (accountType === 'transfer') return false;
+
                 // Only include Expense account type
-                // Accept both 'Expense' and 'expense' for case-insensitivity
-                return accountType?.toLowerCase() === 'expense';
+                return accountType === 'expense';
             });
 
             console.log('Filtered expense transactions:', expenses.length);
 
             setTransactions(expenses);
-
-            // Load categories
-            const { data: cats, error: catError } = await supabase
-                .from('category')
-                .select('id, name');
-
-            if (catError) throw catError;
-            setCategories(cats || []);
-
-            // Load chart of accounts for editing
-            const { data: coa, error: coaError } = await supabase
-                .from('chart_of_accounts')
-                .select('id, name, account_type')
-                .order('name');
-
-            if (coaError) throw coaError;
-            setChartOfAccounts(coa || []);
 
         } catch (err) {
             console.error('Error loading expense data:', err);
@@ -125,21 +140,23 @@ export const ExpenseAnalysis = () => {
     // Update transaction COA
     const updateTransactionCoa = async (txnId, newCoaId) => {
         try {
-            const newCoa = chartOfAccounts.find(c => c.id === newCoaId);
+            // Find the COA by either PocketBase id or supabase_id
+            const newCoa = chartOfAccounts.find(c => c.id === newCoaId || c.supabase_id === newCoaId);
 
-            const { error } = await supabase
-                .from('transactions')
-                .update({ chart_of_account_id: newCoaId })
-                .eq('id', txnId);
+            // Use supabase_id if available (for consistency with existing FK references), otherwise use PocketBase id
+            const coaIdForTransaction = newCoa?.supabase_id || newCoaId;
 
-            if (error) throw error;
+            // Get the PocketBase ID for the transaction (it might be passed as supabase_id)
+            const txnPbId = transactions.find(t => t.id === txnId || t.supabase_id === txnId)?.id || txnId;
+
+            await supabaseTransactionsDB.update(txnPbId, { chart_of_account_id: coaIdForTransaction });
 
             // Update local state
             setTransactions(prev => prev.map(t => {
-                if (t.id === txnId) {
+                if (t.id === txnId || t.supabase_id === txnId) {
                     return {
                         ...t,
-                        chart_of_account_id: newCoaId,
+                        chart_of_account_id: coaIdForTransaction,
                         chart_of_account: newCoa
                     };
                 }

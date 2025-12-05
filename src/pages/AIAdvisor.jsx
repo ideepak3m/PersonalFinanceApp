@@ -3,7 +3,7 @@ import { ChatMessage } from '../components/ai/ChatMessage';
 import { ChatInput } from '../components/ai/ChatInput';
 import { getAIResponse } from '../services/aiService';
 import { Sparkles } from 'lucide-react';
-import { supabaseAccountsDB, supabaseTransactionsDB } from '../services/supabaseDatabase';
+import { supabaseAccountsDB, supabaseTransactionsDB } from '../services/pocketbaseDatabase';
 
 export const AIAdvisor = () => {
     const [accounts, setAccounts] = useState([]);

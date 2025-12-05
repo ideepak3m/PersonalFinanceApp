@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabaseUserProfileDB } from '../../services/supabaseDatabase';
+import { supabaseUserProfileDB } from '../../services/pocketbaseDatabase';
 import {
     User,
     Calendar,
