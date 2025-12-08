@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AccountForm } from '../components/accounts/AccountForm';
 import { AccountList } from '../components/accounts/AccountList';
-import { supabaseAccountsDB } from '../services/pocketbaseDatabase';
+import { accountsDB } from '../services/database';
 
 export const Accounts = () => {
     const [accounts, setAccounts] = useState([]);
@@ -11,14 +11,14 @@ export const Accounts = () => {
 
     useEffect(() => {
         const fetchAccounts = async () => {
-            const data = await supabaseAccountsDB.getAll();
+            const data = await accountsDB.getAll();
             setAccounts(data);
         };
         fetchAccounts();
     }, [refresh]);
 
     const handleAddAccount = async (account) => {
-        await supabaseAccountsDB.add(account);
+        await accountsDB.add(account);
         setRefresh(r => r + 1);
         setShowForm(false);
     };

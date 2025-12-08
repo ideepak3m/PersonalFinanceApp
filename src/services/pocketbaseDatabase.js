@@ -358,6 +358,56 @@ class TransactionsService extends PocketBaseService {
         return this.query(`date >= "${startDate}" && date <= "${endDate}"`, { sort: '-date' });
     }
 
+    /**
+     * Get transactions with flexible filters
+     * @param {Object} filters - { startDate, endDate, accountId, accountIds, searchTerm }
+     * @returns {Promise<Array>} Filtered transactions with merchant relations
+     */
+    async getFiltered(filters = {}) {
+        const { startDate, endDate, accountId, accountIds, searchTerm } = filters;
+
+        let filterParts = [];
+
+        // Date filters
+        if (startDate) {
+            filterParts.push(`date >= "${startDate}"`);
+        }
+        if (endDate) {
+            filterParts.push(`date <= "${endDate}"`);
+        }
+
+        // Account filter (single or multiple)
+        if (accountId && accountId !== 'all') {
+            filterParts.push(`account_id = "${accountId}"`);
+        } else if (accountIds && accountIds.length > 0) {
+            const accountFilter = accountIds.map(id => `account_id = "${id}"`).join(' || ');
+            filterParts.push(`(${accountFilter})`);
+        }
+
+        // Search filter (description or raw_merchant_name)
+        if (searchTerm) {
+            const searchLower = searchTerm.toLowerCase();
+            filterParts.push(`(description ~ "${searchLower}" || raw_merchant_name ~ "${searchLower}")`);
+        }
+
+        const filter = filterParts.length > 0 ? filterParts.join(' && ') : '';
+        const records = await this.query(filter, { sort: '-date' });
+
+        // Expand merchant data
+        const merchantService = new MerchantService();
+        const merchants = await merchantService.getAll();
+        const merchantMap = {};
+        merchants.forEach(m => {
+            if (m.supabase_id) merchantMap[m.supabase_id] = m;
+            merchantMap[m.id] = m;
+        });
+
+        return records.map(r => ({
+            ...r,
+            merchant: r.normalized_merchant_id ? merchantMap[r.normalized_merchant_id] : null
+        }));
+    }
+
     async getAllWithRelations() {
         // Get all transactions with merchant data expanded
         const records = await this.getAll({ sort: '-date' });
@@ -615,6 +665,41 @@ class UserProfileService extends PocketBaseService {
             return null;
         }
     }
+
+    // Get profile for current authenticated user
+    async getProfile() {
+        try {
+            const userId = await getDefaultUserId();
+            if (!userId) return null;
+            return await this.getByUserId(userId);
+        } catch {
+            return null;
+        }
+    }
+
+    // Upsert profile - create if not exists, update if exists
+    async upsertProfile(profileData) {
+        try {
+            const userId = profileData.user_id || await getDefaultUserId();
+            if (!userId) throw new Error('No user ID available');
+
+            // Check if profile exists
+            const existing = await this.getByUserId(userId);
+
+            const data = { ...profileData, user_id: userId };
+
+            if (existing) {
+                // Update existing profile
+                return await this.update(existing.id, data);
+            } else {
+                // Create new profile
+                return await this.create(data);
+            }
+        } catch (error) {
+            console.error('Error upserting profile:', error);
+            throw error;
+        }
+    }
 }
 
 class GovernmentBenefitsService extends PocketBaseService {
@@ -630,11 +715,55 @@ class GovernmentBenefitsService extends PocketBaseService {
             return null;
         }
     }
+
+    // Get benefits for current authenticated user
+    async getBenefits() {
+        try {
+            const userId = await getDefaultUserId();
+            if (!userId) return null;
+            return await this.getByUserId(userId);
+        } catch {
+            return null;
+        }
+    }
+
+    // Upsert benefits - create if not exists, update if exists
+    async upsertBenefits(benefitsData) {
+        try {
+            const userId = benefitsData.user_id || await getDefaultUserId();
+            if (!userId) throw new Error('No user ID available');
+
+            // Check if benefits record exists
+            const existing = await this.getByUserId(userId);
+
+            const data = { ...benefitsData, user_id: userId };
+
+            if (existing) {
+                // Update existing benefits
+                return await this.update(existing.id, data);
+            } else {
+                // Create new benefits record
+                return await this.create(data);
+            }
+        } catch (error) {
+            console.error('Error upserting benefits:', error);
+            throw error;
+        }
+    }
 }
 
 class ProfilesService extends PocketBaseService {
     constructor() {
         super('profiles');
+    }
+
+    async getByUserId(userId) {
+        try {
+            const records = await this.query(`user_id = "${userId}"`);
+            return records[0] || null;
+        } catch {
+            return null;
+        }
     }
 }
 

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Upload } from 'lucide-react';
 import { TransactionUpload } from '../components/transactions/TransactionUpload';
 import BankAccountDetailsModal from '../components/accounts/BankAccountDetailsModal';
-import { supabaseAccountsDB, supabaseTransactionsDB, supabaseChartOfAccountsDB, supabaseImportStagingDB, supabaseImportRawDataDB } from '../services/pocketbaseDatabase';
+import { accountsDB, transactionsDB, chartOfAccountsDB, importStagingDB, importRawDataDB } from '../services/database';
 import transactionService from '../services/transactionService';
 import Papa from 'papaparse';
 
@@ -56,8 +56,8 @@ export const AccountsDashboard = () => {
             setLoading(true);
 
             const [accs, coa] = await Promise.all([
-                supabaseAccountsDB.getAll(),
-                supabaseChartOfAccountsDB.getAll()
+                accountsDB.getAll(),
+                chartOfAccountsDB.getAll()
             ]);
 
             setAccounts(accs || []);
@@ -87,7 +87,7 @@ export const AccountsDashboard = () => {
 
     const getUncategorizedCounts = async (suspenseId = null) => {
         try {
-            let query = supabaseTransactionsDB.table()
+            let query = transactionsDB.table()
                 .select('account_id');
 
             // Include both uncategorized status AND suspense COA transactions
@@ -99,6 +99,8 @@ export const AccountsDashboard = () => {
 
             const { data, error } = await query;
 
+            console.log('Uncategorized query result:', { data, error, suspenseId });
+
             if (error) throw error;
 
             const counts = {};
@@ -106,6 +108,7 @@ export const AccountsDashboard = () => {
                 counts[txn.account_id] = (counts[txn.account_id] || 0) + 1;
             });
 
+            console.log('Uncategorized counts:', counts);
             return counts;
         } catch (error) {
             console.error('Error getting counts:', error);
@@ -115,7 +118,7 @@ export const AccountsDashboard = () => {
 
     const getPendingImportCounts = async () => {
         try {
-            const { data, error } = await supabaseImportStagingDB.table()
+            const { data, error } = await importStagingDB.table()
                 .select('account_id, row_count')
                 .in('status', ['pending_mapping', 'mapped']);
 
@@ -139,7 +142,7 @@ export const AccountsDashboard = () => {
     const getLastTransactionDates = async () => {
         try {
             // Get last transaction date for each account from transactions table
-            const { data, error } = await supabaseTransactionsDB.table()
+            const { data, error } = await transactionsDB.table()
                 .select('account_id, date')
                 .order('date', { ascending: false });
 
@@ -207,7 +210,7 @@ export const AccountsDashboard = () => {
                 account_category: 'Bank'
             };
 
-            await supabaseAccountsDB.add(accountToSave);
+            await accountsDB.add(accountToSave);
 
             setShowNewAccountModal(false);
             await loadData();
@@ -279,7 +282,7 @@ export const AccountsDashboard = () => {
             });
 
             // Create staging record
-            const staging = await supabaseImportStagingDB.add({
+            const staging = await importStagingDB.add({
                 account_id: accountId,
                 file_name: file.name,
                 file_type: fileType,
@@ -296,7 +299,7 @@ export const AccountsDashboard = () => {
 
             // Save raw data
             console.log('Saving raw data to import_raw_data...');
-            await supabaseImportRawDataDB.add({
+            await importRawDataDB.add({
                 staging_id: staging.id,
                 raw_data: rawData
             });
@@ -366,10 +369,10 @@ export const AccountsDashboard = () => {
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                         {filteredAccounts.map((account) => {
-                            // Look up by both id and supabase_id since transactions may reference old Supabase IDs
-                            const count = uncategorizedCounts[account.id] || uncategorizedCounts[account.supabase_id] || 0;
-                            const pendingCount = pendingImportCounts[account.id] || pendingImportCounts[account.supabase_id] || 0;
-                            const lastDate = lastTransactionDates[account.id] || lastTransactionDates[account.supabase_id];
+                            // After UUID migration, all IDs are now PocketBase IDs
+                            const count = uncategorizedCounts[account.id] || 0;
+                            const pendingCount = pendingImportCounts[account.id] || 0;
+                            const lastDate = lastTransactionDates[account.id];
 
                             return (
                                 <tr key={account.id} className="hover:bg-gray-50">

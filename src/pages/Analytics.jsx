@@ -4,7 +4,7 @@ import { PortfolioCard } from '../components/analytics/PortfolioCard';
 import { CategoryChart } from '../components/analytics/CategoryChart';
 import { DollarSign, TrendingUp, PiggyBank } from 'lucide-react';
 import { calculateTotalBalance } from '../utils/calculations';
-import { supabaseAccountsDB, supabaseTransactionsDB } from '../services/pocketbaseDatabase';
+import { accountsDB, transactionsDB } from '../services/database';
 
 export const Analytics = () => {
     const [accounts, setAccounts] = useState([]);
@@ -14,9 +14,9 @@ export const Analytics = () => {
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
-            const accs = await supabaseAccountsDB.getAll();
+            const accs = await accountsDB.getAll();
             setAccounts(accs);
-            const txns = await supabaseTransactionsDB.getAll();
+            const txns = await transactionsDB.getAll();
             setTransactions(txns);
             setLoading(false);
         };

@@ -2,6 +2,20 @@
 import { supabase } from './supabaseClient';
 
 /**
+ * Get the default user ID from Supabase auth
+ * Returns null if not authenticated
+ */
+export async function getDefaultUserId() {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        return user?.id || null;
+    } catch (error) {
+        console.error('Error getting default user ID:', error);
+        return null;
+    }
+}
+
+/**
  * Browser cache for frequently used tables
  * Cache expires after 5 minutes
  */
@@ -315,6 +329,69 @@ class TransactionService extends SupabaseService {
     }
 
     /**
+     * Get transactions with flexible filters
+     * @param {Object} filters - { startDate, endDate, accountId, accountIds, searchTerm }
+     * @returns {Promise<Array>} Filtered transactions with merchant relations
+     */
+    async getFiltered(filters = {}) {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const { startDate, endDate, accountId, accountIds, searchTerm } = filters;
+
+            let query = this.table()
+                .select(`
+                    *,
+                    account:account_id (
+                        id,
+                        name,
+                        account_type
+                    ),
+                    merchant:normalized_merchant_id (
+                        id,
+                        name,
+                        normalized_name
+                    ),
+                    chart_of_account:chart_of_account_id (
+                        id,
+                        code,
+                        name
+                    )
+                `)
+                .eq('user_id', user.id);
+
+            // Date filters
+            if (startDate) {
+                query = query.gte('date', startDate);
+            }
+            if (endDate) {
+                query = query.lte('date', endDate);
+            }
+
+            // Account filter (single)
+            if (accountId && accountId !== 'all') {
+                query = query.eq('account_id', accountId);
+            } else if (accountIds && accountIds.length > 0) {
+                query = query.in('account_id', accountIds);
+            }
+
+            // Search filter
+            if (searchTerm) {
+                query = query.or(`description.ilike.%${searchTerm}%,raw_merchant_name.ilike.%${searchTerm}%`);
+            }
+
+            const { data, error } = await query.order('date', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching filtered transactions:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Get transactions by account
      */
     async getByAccount(accountId) {
@@ -332,10 +409,8 @@ class TransactionService extends SupabaseService {
         }
     }
 }
-
-/**
  * Transaction Split specific service
- */
+    */
 class TransactionSplitService extends SupabaseService {
     constructor() {
         super('transaction_split', 'personal_finance');

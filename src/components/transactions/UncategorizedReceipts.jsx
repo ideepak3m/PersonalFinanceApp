@@ -8,14 +8,14 @@ import { ImprovedSplitModal } from './ImprovedSplitModal';
 import { useConfirmModal } from '../common/ConfirmModal';
 import transactionService from '../../services/transactionService';
 import {
-    supabaseAccountsDB,
-    supabaseTransactionsDB,
-    supabaseChartOfAccountsDB,
-    supabaseMerchantDB,
-    supabaseCategoryDB,
-    supabaseTransactionSplitDB,
-    supabaseMerchantSplitRulesDB
-} from '../../services/pocketbaseDatabase';
+    accountsDB,
+    transactionsDB,
+    chartOfAccountsDB,
+    merchantDB,
+    categoryDB,
+    transactionSplitDB,
+    merchantSplitRulesDB
+} from '../../services/database';
 import { transactionLogic } from '../../services/transactionBusinessLogic';
 
 export const UncategorizedReceipts = () => {
@@ -56,9 +56,9 @@ export const UncategorizedReceipts = () => {
             if (document.visibilityState === 'visible' && accountId) {
                 // Reload reference data (COA, categories, merchants) silently
                 Promise.all([
-                    supabaseChartOfAccountsDB.getAll(),
-                    supabaseCategoryDB.getAll(),
-                    supabaseMerchantDB.getAll()
+                    chartOfAccountsDB.getAll(),
+                    categoryDB.getAll(),
+                    merchantDB.getAll()
                 ]).then(([coa, cats, merchs]) => {
                     const sortedCoa = (coa || []).sort((a, b) =>
                         (a.name || '').localeCompare(b.name || '')
@@ -84,11 +84,11 @@ export const UncategorizedReceipts = () => {
             setLoading(true);
 
             const [acc, coa, cats, merchs, splitRules] = await Promise.all([
-                supabaseAccountsDB.getById(accountId),
-                supabaseChartOfAccountsDB.getAll(),
-                supabaseCategoryDB.getAll(),
-                supabaseMerchantDB.getAll(),
-                supabaseMerchantSplitRulesDB.getAll()
+                accountsDB.getById(accountId),
+                chartOfAccountsDB.getAll(),
+                categoryDB.getAll(),
+                merchantDB.getAll(),
+                merchantSplitRulesDB.getAll()
             ]);
 
             setAccount(acc);
@@ -117,7 +117,6 @@ export const UncategorizedReceipts = () => {
             setSuspenseAccount(suspense);
 
             // Load uncategorized transactions with enrichment
-            // Pass the account so we can use supabase_id for querying transactions
             await loadTransactions(merchs || [], cats || [], sortedCoa, splitRules || [], acc);
 
         } catch (error) {
@@ -134,20 +133,18 @@ export const UncategorizedReceipts = () => {
             const coaList = coaData || chartOfAccounts;
             const suspense = coaList.find(c => c.name?.toLowerCase() === 'suspense');
             const suspenseId = suspense?.id;
-            // Also check supabase_id for suspense since transactions may reference old IDs
-            const suspenseSupabaseId = suspense?.supabase_id;
 
-            console.log('loadTransactions - suspenseId:', suspenseId, 'suspenseSupabaseId:', suspenseSupabaseId, 'coaList length:', coaList?.length);
+            console.log('loadTransactions - suspenseId:', suspenseId, 'coaList length:', coaList?.length);
 
-            // Use supabase_id if available since transactions reference old Supabase IDs
+            // After UUID migration, use PocketBase ID directly (from URL param or account object)
             const acc = accountData || account;
-            const txnAccountId = acc?.supabase_id || accountId;
-            console.log('Querying transactions for account_id:', txnAccountId, '(account.supabase_id:', acc?.supabase_id, ', URL accountId:', accountId, ')');
+            const txnAccountId = acc?.id || accountId;
+            console.log('Querying transactions for account_id:', txnAccountId, '(URL accountId:', accountId, ')');
 
             // Load transactions that are either:
             // 1. status = 'uncategorized' OR
             // 2. chart_of_account_id = suspense (these were categorized but still have suspense COA)
-            let query = supabaseTransactionsDB.table()
+            let query = transactionsDB.table()
                 .select(`
                     *,
                     merchant:normalized_merchant_id (
@@ -160,12 +157,8 @@ export const UncategorizedReceipts = () => {
                 .order('date', { ascending: false });
 
             // Use OR filter to get both uncategorized and suspense transactions
-            // Check both PocketBase ID and supabase_id for suspense COA
             if (suspenseId) {
-                let orFilter = `status.eq.uncategorized,chart_of_account_id.eq.${suspenseId}`;
-                if (suspenseSupabaseId && suspenseSupabaseId !== suspenseId) {
-                    orFilter += `,chart_of_account_id.eq.${suspenseSupabaseId}`;
-                }
+                const orFilter = `status.eq.uncategorized,chart_of_account_id.eq.${suspenseId}`;
                 console.log('Using OR filter:', orFilter);
                 query = query.or(orFilter);
             } else {
@@ -384,10 +377,8 @@ export const UncategorizedReceipts = () => {
     // Helper to check if user manually selected a COA (not Suspense)
     const hasManualCoaSelection = (t) => {
         if (!t.chart_of_account_id) return false;
-        // Look up COA by both id and supabase_id since transactions may reference old Supabase UUIDs
-        const coa = chartOfAccounts.find(c =>
-            c.id === t.chart_of_account_id || c.supabase_id === t.chart_of_account_id
-        );
+        // Look up COA by id (UUIDs migrated to PocketBase IDs)
+        const coa = chartOfAccounts.find(c => c.id === t.chart_of_account_id);
         // If COA not found, treat as no manual selection
         if (!coa) return false;
         // If COA is Suspense, it's not a manual selection
@@ -413,10 +404,8 @@ export const UncategorizedReceipts = () => {
                 // Include transactions with COA suggestions that are NOT Suspense
                 if (t.suggestion?.type === 'coa') {
                     const coaId = t.suggestion.chartOfAccountId;
-                    // Look up by both id and supabase_id
-                    const coa = chartOfAccounts.find(c =>
-                        c.id === coaId || c.supabase_id === coaId
-                    );
+                    // Look up COA by id
+                    const coa = chartOfAccounts.find(c => c.id === coaId);
                     if (!coa) return false;
                     if (coa?.name?.toLowerCase() === 'suspense') return false;
                     return true;
@@ -516,12 +505,12 @@ export const UncategorizedReceipts = () => {
                     };
 
                     // Update transaction status and COA
-                    await supabaseTransactionsDB.update(txn.id, updates);
+                    await transactionsDB.update(txn.id, updates);
 
                     // If it's a split transaction (manual or default), save the split records
                     if (shouldSplit && splitsToUse && splitsToUse.length > 0) {
                         // Delete existing splits first (in case of re-edit)
-                        await supabaseTransactionSplitDB.deleteByTransactionId(txn.id);
+                        await transactionSplitDB.deleteByTransactionId(txn.id);
 
                         // Prepare split records for database
                         const splitRecords = splitsToUse.map(s => ({
@@ -534,12 +523,12 @@ export const UncategorizedReceipts = () => {
 
                         // Save all splits
                         for (const splitRecord of splitRecords) {
-                            await supabaseTransactionSplitDB.add(splitRecord);
+                            await transactionSplitDB.add(splitRecord);
                         }
 
                         // Only create merchant split rule if this was a manual split (not using default)
                         if (txn.splitReady && txn.suggestedMerchantName) {
-                            const existingRule = await supabaseMerchantSplitRulesDB.getByMerchantName(txn.suggestedMerchantName);
+                            const existingRule = await merchantSplitRulesDB.getByMerchantName(txn.suggestedMerchantName);
 
                             if (!existingRule) {
                                 // Create new merchant split rule
@@ -552,7 +541,7 @@ export const UncategorizedReceipts = () => {
                                     }))
                                 };
 
-                                await supabaseMerchantSplitRulesDB.add(ruleRecord);
+                                await merchantSplitRulesDB.add(ruleRecord);
                                 console.log('Created new split rule for merchant:', txn.suggestedMerchantName);
                             } else {
                                 console.log('Split rule already exists for merchant:', txn.suggestedMerchantName);
@@ -601,7 +590,7 @@ export const UncategorizedReceipts = () => {
 
             if (choice) {
                 // Delete transaction
-                await supabaseTransactionsDB.delete(txn.id);
+                await transactionsDB.delete(txn.id);
             } else {
                 // Remove split data
                 setTransactions(prev =>
@@ -611,7 +600,7 @@ export const UncategorizedReceipts = () => {
             }
         } else {
             if (!await confirm('Delete this transaction?', 'Delete')) return;
-            await supabaseTransactionsDB.delete(txn.id);
+            await transactionsDB.delete(txn.id);
         }
 
         await loadTransactions();
@@ -638,7 +627,7 @@ export const UncategorizedReceipts = () => {
 
         if (merchantName) {
             // Check if a split rule already exists for this merchant
-            const existingRule = await supabaseMerchantSplitRulesDB.getByMerchantName(merchantName);
+            const existingRule = await merchantSplitRulesDB.getByMerchantName(merchantName);
 
             if (!existingRule) {
                 // Ask user if they want to save as default
@@ -657,7 +646,7 @@ export const UncategorizedReceipts = () => {
                                 percentage: parseFloat(s.percent)
                             }));
 
-                        const newRule = await supabaseMerchantSplitRulesDB.add({
+                        const newRule = await merchantSplitRulesDB.add({
                             merchant_friendly_name: merchantName,
                             splits: splitRules
                         });
@@ -923,7 +912,7 @@ export const UncategorizedReceipts = () => {
                                                                         onClick={async () => {
                                                                             try {
                                                                                 // Save this transaction's merchant link
-                                                                                await supabaseTransactionsDB.update(txn.id, {
+                                                                                await transactionsDB.update(txn.id, {
                                                                                     normalized_merchant_id: merchant.id
                                                                                 });
                                                                                 setMerchantSearch({ ...merchantSearch, [txn.id]: merchant.normalized_name });
@@ -943,7 +932,7 @@ export const UncategorizedReceipts = () => {
                                                                                         // Extract a clean alias pattern (remove numbers/dates at the end)
                                                                                         const aliasPattern = descriptionToAdd.replace(/[#\d]+$/, '').trim();
                                                                                         const newAliases = [...currentAliases, aliasPattern];
-                                                                                        await supabaseMerchantDB.update(merchant.id, { aliases: newAliases });
+                                                                                        await merchantDB.update(merchant.id, { aliases: newAliases });
                                                                                         console.log(`Added alias "${aliasPattern}" to merchant "${merchant.normalized_name}"`);
                                                                                     }
                                                                                 }
@@ -981,13 +970,13 @@ export const UncategorizedReceipts = () => {
 
                                                                                     if (await confirm(applyCoaMsg, 'Apply COA')) {
                                                                                         // Apply COA to current transaction
-                                                                                        await supabaseTransactionsDB.update(txn.id, {
+                                                                                        await transactionsDB.update(txn.id, {
                                                                                             chart_of_account_id: matchedCoa.id
                                                                                         });
 
                                                                                         // Apply to similar transactions too
                                                                                         for (const similarTxn of similarTxns) {
-                                                                                            await supabaseTransactionsDB.update(similarTxn.id, {
+                                                                                            await transactionsDB.update(similarTxn.id, {
                                                                                                 normalized_merchant_id: merchant.id,
                                                                                                 chart_of_account_id: matchedCoa.id
                                                                                             });
@@ -996,7 +985,7 @@ export const UncategorizedReceipts = () => {
                                                                                         // User declined COA but ask about merchant linking
                                                                                         if (await confirm(`Would you still like to assign "${merchant.normalized_name}" to the ${similarTxns.length} other similar transactions?`, 'Assign Merchant')) {
                                                                                             for (const similarTxn of similarTxns) {
-                                                                                                await supabaseTransactionsDB.update(similarTxn.id, {
+                                                                                                await transactionsDB.update(similarTxn.id, {
                                                                                                     normalized_merchant_id: merchant.id
                                                                                                 });
                                                                                             }
@@ -1006,7 +995,7 @@ export const UncategorizedReceipts = () => {
                                                                                     // No COA match, just offer merchant linking
                                                                                     if (await confirm(`Found ${similarTxns.length} other transaction(s) with similar descriptions.\n\nWould you like to also assign "${merchant.normalized_name}" to those transactions?`, 'Assign Merchant')) {
                                                                                         for (const similarTxn of similarTxns) {
-                                                                                            await supabaseTransactionsDB.update(similarTxn.id, {
+                                                                                            await transactionsDB.update(similarTxn.id, {
                                                                                                 normalized_merchant_id: merchant.id
                                                                                             });
                                                                                         }
@@ -1038,11 +1027,11 @@ export const UncategorizedReceipts = () => {
                                                                     onClick={async () => {
                                                                         try {
                                                                             const merchantName = merchantSearch[txn.id].trim();
-                                                                            const newMerchant = await supabaseMerchantDB.add({
+                                                                            const newMerchant = await merchantDB.add({
                                                                                 normalized_name: merchantName,
                                                                                 aliases: [txn.description]
                                                                             });
-                                                                            await supabaseTransactionsDB.update(txn.id, {
+                                                                            await transactionsDB.update(txn.id, {
                                                                                 normalized_merchant_id: newMerchant.id
                                                                             });
                                                                             setShowMerchantDropdown({ ...showMerchantDropdown, [txn.id]: false });
@@ -1066,7 +1055,7 @@ export const UncategorizedReceipts = () => {
 
                                                                                 if (applyToOthers) {
                                                                                     for (const similarTxn of similarTxns) {
-                                                                                        await supabaseTransactionsDB.update(similarTxn.id, {
+                                                                                        await transactionsDB.update(similarTxn.id, {
                                                                                             normalized_merchant_id: newMerchant.id
                                                                                         });
                                                                                     }
@@ -1213,7 +1202,7 @@ export const UncategorizedReceipts = () => {
                             const merchantName = editModalTxn.merchant?.normalized_name || editModalTxn.suggestedMerchantName;
 
                             // Save to database
-                            await supabaseTransactionsDB.update(editModalTxn.id, {
+                            await transactionsDB.update(editModalTxn.id, {
                                 chart_of_account_id: coaId
                             });
 
@@ -1268,7 +1257,7 @@ export const UncategorizedReceipts = () => {
                                     if (applyToOthers) {
                                         // Save COA to database for all matching transactions
                                         for (const otherTxn of otherTxns) {
-                                            await supabaseTransactionsDB.update(otherTxn.id, {
+                                            await transactionsDB.update(otherTxn.id, {
                                                 chart_of_account_id: coaId
                                             });
                                         }

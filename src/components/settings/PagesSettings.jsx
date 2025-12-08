@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, Save } from 'lucide-react';
-import { supabaseSettingsDB } from '../../services/pocketbaseDatabase';
+import { settingsDB } from '../../services/database';
 
 const DEFAULT_PAGES = [
     { id: 'accounts', name: 'Accounts', enabled: true, order: 1 },
@@ -21,7 +21,7 @@ export const PagesSettings = () => {
         const fetchPages = async () => {
             setLoading(true);
             try {
-                const data = await supabaseSettingsDB.getPagesConfiguration();
+                const data = await settingsDB.getPagesConfiguration();
                 if (data && Array.isArray(data) && data.length > 0) {
                     setPages(data);
                 } else {
@@ -64,7 +64,7 @@ export const PagesSettings = () => {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await supabaseSettingsDB.setPagesConfiguration(pages);
+            await settingsDB.setPagesConfiguration(pages);
             alert('Pages configuration saved successfully!');
         } catch (e) {
             alert('Failed to save pages configuration.');

@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
 import {
-    supabaseTransactionsDB,
-    supabaseCategoryDB,
-    supabaseChartOfAccountsDB
-} from '../../services/pocketbaseDatabase';
+    transactionsDB,
+    categoryDB,
+    chartOfAccountsDB
+} from '../../services/database';
 import {
     TrendingUp,
     Calendar,
@@ -28,7 +27,6 @@ const INCOME_INDICATORS = [
 ];
 
 export const IncomeAnalysis = () => {
-    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [transactions, setTransactions] = useState([]);
@@ -36,10 +34,8 @@ export const IncomeAnalysis = () => {
     const [selectedMonth, setSelectedMonth] = useState(null);
 
     useEffect(() => {
-        if (user) {
-            loadData();
-        }
-    }, [user, selectedYear]);
+        loadData();
+    }, [selectedYear]);
 
     const loadData = async () => {
         setLoading(true);
@@ -47,8 +43,8 @@ export const IncomeAnalysis = () => {
 
         try {
             // Load categories and chart of accounts first (for lookups)
-            const cats = await supabaseCategoryDB.getAll();
-            const coa = await supabaseChartOfAccountsDB.getAll();
+            const cats = await categoryDB.getAll();
+            const coa = await chartOfAccountsDB.getAll();
 
             // Create lookup maps using supabase_id (original UUID) as the key
             // This is needed because transaction foreign keys reference original Supabase UUIDs
@@ -68,7 +64,7 @@ export const IncomeAnalysis = () => {
             const startDate = `${selectedYear}-01-01`;
             const endDate = `${selectedYear}-12-31`;
 
-            const allTxns = await supabaseTransactionsDB.getAll();
+            const allTxns = await transactionsDB.getAll();
 
             // Filter by date range
             const txns = (allTxns || []).filter(t => {

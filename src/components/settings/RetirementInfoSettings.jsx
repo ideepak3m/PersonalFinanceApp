@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabaseGovernmentBenefitsDB } from '../../services/pocketbaseDatabase';
+import { governmentBenefitsDB } from '../../services/database';
 import { CPPContributionCalculator } from './CPPContributionCalculator';
 import {
     Landmark,
@@ -14,16 +14,20 @@ import {
     Calculator,
     Building,
     Users,
-    FileSpreadsheet
+    FileSpreadsheet,
+    X
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-export const RetirementInfoSettings = () => {
+export const RetirementInfoSettings = ({ onClose }) => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
     const [showCPPCalculator, setShowCPPCalculator] = useState(false);
+    const [originalBenefits, setOriginalBenefits] = useState(null);
     const [benefits, setBenefits] = useState({
         // CPP Information
         cpp_estimated_at_65: '',
@@ -73,6 +77,15 @@ export const RetirementInfoSettings = () => {
         loadBenefits();
     }, [user]);
 
+    // Helper to format date from PocketBase (ISO with time) to yyyy-MM-dd for input
+    const formatDateForInput = (dateStr) => {
+        if (!dateStr) return '';
+        // Handle ISO format like "1972-02-03 00:00:00.000Z" or "1972-02-03T00:00:00.000Z"
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return '';
+        return date.toISOString().split('T')[0];
+    };
+
     const loadBenefits = async () => {
         if (!user) return;
 
@@ -80,14 +93,20 @@ export const RetirementInfoSettings = () => {
         setError(null);
 
         try {
-            const data = await supabaseGovernmentBenefitsDB.getBenefits();
+            const data = await governmentBenefitsDB.getBenefits();
             if (data) {
                 // Convert nulls to empty strings for form fields
                 const formData = {};
                 Object.keys(benefits).forEach(key => {
                     formData[key] = data[key] ?? '';
                 });
+                // Format date fields for HTML date input
+                formData.cpp_statement_date = formatDateForInput(data.cpp_statement_date);
                 setBenefits(formData);
+                setOriginalBenefits(formData);
+            } else {
+                // No benefits exist yet, set original to current defaults
+                setOriginalBenefits(benefits);
             }
         } catch (err) {
             console.error('Error loading benefits:', err);
@@ -104,6 +123,24 @@ export const RetirementInfoSettings = () => {
             [name]: type === 'checkbox' ? checked : value
         }));
         setSuccess(false);
+    };
+
+    // Check if benefits have changed from original
+    const hasChanges = () => {
+        if (!originalBenefits) return false;
+        return JSON.stringify(benefits) !== JSON.stringify(originalBenefits);
+    };
+
+    const handleCancel = () => {
+        if (onClose) {
+            onClose();
+        } else {
+            // Reset to original and navigate back
+            if (originalBenefits) {
+                setBenefits(originalBenefits);
+            }
+            navigate(-1);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -152,7 +189,7 @@ export const RetirementInfoSettings = () => {
                 last_updated: new Date().toISOString().split('T')[0]
             };
 
-            await supabaseGovernmentBenefitsDB.upsertBenefits(benefitsData);
+            await governmentBenefitsDB.upsertBenefits(benefitsData);
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
         } catch (err) {
@@ -961,11 +998,19 @@ export const RetirementInfoSettings = () => {
                     )}
                 </div>
 
-                {/* Save Button */}
-                <div className="flex justify-end">
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3">
+                    <button
+                        type="button"
+                        onClick={handleCancel}
+                        className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 font-medium"
+                    >
+                        <X className="w-5 h-5" />
+                        Cancel
+                    </button>
                     <button
                         type="submit"
-                        disabled={saving}
+                        disabled={saving || !hasChanges()}
                         className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
                     >
                         {saving ? (

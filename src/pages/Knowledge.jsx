@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { KnowledgeCard } from '../components/knowledge/KnowledgeCard';
-import { supabaseKnowledgeDB } from '../services/pocketbaseDatabase';
+import { knowledgeDB } from '../services/database';
 
 export const Knowledge = () => {
     const [resources, setResources] = useState([]);
@@ -9,7 +9,7 @@ export const Knowledge = () => {
     useEffect(() => {
         const fetchResources = async () => {
             setLoading(true);
-            const data = await supabaseKnowledgeDB.getAll();
+            const data = await knowledgeDB.getAll();
             setResources(data || []);
             setLoading(false);
         };

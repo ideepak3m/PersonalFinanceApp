@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Save } from 'lucide-react';
-import { supabaseSettingsDB } from '../../services/pocketbaseDatabase';
+import { settingsDB } from '../../services/database';
 
 const DEFAULT_CONFIG = {
     appName: 'Personal Finance',
@@ -23,7 +23,7 @@ export const ConfigurationSettings = () => {
         const fetchConfig = async () => {
             setLoading(true);
             try {
-                const data = await supabaseSettingsDB.getConfiguration();
+                const data = await settingsDB.getConfiguration();
                 if (data) {
                     setConfig(data);
                 }
@@ -45,7 +45,7 @@ export const ConfigurationSettings = () => {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await supabaseSettingsDB.setConfiguration(config);
+            await settingsDB.setConfiguration(config);
             alert('Configuration saved successfully!');
         } catch (e) {
             alert('Failed to save configuration.');

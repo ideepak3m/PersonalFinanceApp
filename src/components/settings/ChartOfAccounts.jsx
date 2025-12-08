@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Save, X, Loader } from 'lucide-react';
-import { supabaseChartOfAccountsDB } from '../../services/pocketbaseDatabase';
+import { chartOfAccountsDB } from '../../services/database';
 
 // Account types for personal finance
 const ACCOUNT_TYPES = [
@@ -34,7 +34,7 @@ export const ChartOfAccounts = () => {
     const loadAccounts = async () => {
         setLoading(true);
         try {
-            const data = await supabaseChartOfAccountsDB.getAll();
+            const data = await chartOfAccountsDB.getAll();
             // Sort by account_type then by name
             const sorted = (data || []).sort((a, b) => {
                 if (a.account_type !== b.account_type) {
@@ -88,7 +88,7 @@ export const ChartOfAccounts = () => {
 
         setSaving(true);
         try {
-            await supabaseChartOfAccountsDB.add({
+            await chartOfAccountsDB.add({
                 code: code,
                 name: formData.name.trim(),
                 account_type: formData.account_type,
@@ -134,7 +134,7 @@ export const ChartOfAccounts = () => {
 
         setSaving(true);
         try {
-            await supabaseChartOfAccountsDB.update(editingId, {
+            await chartOfAccountsDB.update(editingId, {
                 name: formData.name.trim(),
                 account_type: formData.account_type,
                 description: formData.description.trim() || null

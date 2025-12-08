@@ -2,11 +2,11 @@
 // Core business logic separated from UI
 
 import {
-    supabaseTransactionsDB,
-    supabaseTransactionSplitDB,
-    supabaseMerchantDB,
-    supabaseCategoryDB
-} from './pocketbaseDatabase';
+    transactionsDB,
+    transactionSplitDB,
+    merchantDB,
+    categoryDB
+} from './database';
 
 class TransactionBusinessLogic {
     /**
@@ -70,7 +70,7 @@ class TransactionBusinessLogic {
         if (merchant) return merchant;
 
         // Fallback to database search
-        return await supabaseMerchantDB.getByRawNameOrAlias(rawName);
+        return await merchantDB.getByRawNameOrAlias(rawName);
     }
 
     /**
@@ -175,7 +175,7 @@ class TransactionBusinessLogic {
             split_chart_of_account_id: splits[0].chartOfAccountId
         });
 
-        const savedTransaction = await supabaseTransactionsDB.add(txnToSave);
+        const savedTransaction = await transactionsDB.add(txnToSave);
 
         // Create split records
         const splitRecords = splits.map(split => ({
@@ -187,7 +187,7 @@ class TransactionBusinessLogic {
             belief_tag: split.beliefTag || null
         }));
 
-        await supabaseTransactionSplitDB.bulkAdd(splitRecords);
+        await transactionSplitDB.bulkAdd(splitRecords);
 
         return savedTransaction;
     }
@@ -203,14 +203,14 @@ class TransactionBusinessLogic {
         }
 
         // Update transaction to mark as split
-        await supabaseTransactionsDB.update(transactionId, {
+        await transactionsDB.update(transactionId, {
             is_split: true,
             chart_of_account_id: null,
             split_chart_of_account_id: splits[0].chartOfAccountId
         });
 
         // Delete old splits
-        await supabaseTransactionSplitDB.deleteByTransactionId(transactionId);
+        await transactionSplitDB.deleteByTransactionId(transactionId);
 
         // Create new split records
         const splitRecords = splits.map(split => ({
@@ -222,7 +222,7 @@ class TransactionBusinessLogic {
             belief_tag: split.beliefTag || null
         }));
 
-        await supabaseTransactionSplitDB.bulkAdd(splitRecords);
+        await transactionSplitDB.bulkAdd(splitRecords);
 
         return true;
     }
@@ -232,7 +232,7 @@ class TransactionBusinessLogic {
      */
     async bulkSaveTransactions(transactions) {
         const normalized = transactions.map(txn => this.normalizeTransaction(txn));
-        return await supabaseTransactionsDB.bulkAdd(normalized);
+        return await transactionsDB.bulkAdd(normalized);
     }
 
     /**
@@ -241,7 +241,7 @@ class TransactionBusinessLogic {
     async createMerchant(name, categoryId, aliases = []) {
         const normalizedName = this.normalizeMerchantName(name);
 
-        return await supabaseMerchantDB.add({
+        return await merchantDB.add({
             normalized_name: normalizedName,
             category_id: categoryId,
             aliases: aliases.length > 0 ? aliases : [name]

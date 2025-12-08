@@ -1,243 +1,104 @@
-// src/services/database.js
-import Dexie from 'dexie';
+// Database Facade - Switches between PocketBase and Supabase based on VITE_DB_MODE
+// Usage: Set VITE_DB_MODE=pocketbase or VITE_DB_MODE=supabase in .env.local
+//
+// Example .env.local:
+//   VITE_DB_MODE=pocketbase  # For local/offline use
+//   VITE_DB_MODE=supabase    # For cloud deployment
 
-class FinanceDatabase extends Dexie {
-    constructor() {
-        super('PersonalFinanceDB');
+const DB_MODE = import.meta.env.VITE_DB_MODE || 'pocketbase';
 
-        this.version(1).stores({
-            providers: '++id, name, country, type',
-            accounts: '++id, country, accountCategory, providerId, accountNumber, name',
-            products: '++id, accountId, productType, productCode, purchaseDate',
-            productMetadata: '++id, productId, key',
-            transactions: '++id, accountId, productId, date, type, category',
-            budgets: '++id, category, month, year',
-            goals: '++id, name, deadline'
-        });
-    }
+console.log(`[Database] Running in ${DB_MODE.toUpperCase()} mode`);
+
+// Dynamic imports based on mode
+let dbModule;
+
+if (DB_MODE === 'supabase') {
+    dbModule = await import('./supabaseDatabase.js');
+} else {
+    dbModule = await import('./pocketbaseDatabase.js');
 }
 
-const db = new FinanceDatabase();
+// ============ Core Database Services (Clean Names) ============
+export const accountsDB = dbModule.supabaseAccountsDB;
+export const transactionsDB = dbModule.supabaseTransactionsDB;
+export const chartOfAccountsDB = dbModule.supabaseChartOfAccountsDB;
+export const categoryDB = dbModule.supabaseCategoryDB;
+export const merchantDB = dbModule.supabaseMerchantDB;
+export const merchantSplitRulesDB = dbModule.supabaseMerchantSplitRulesDB;
+export const transactionSplitDB = dbModule.supabaseTransactionSplitDB;
 
-// Providers
-export const providersDB = {
-    getAll: async () => await db.providers.toArray(),
+// ============ Investment Services ============
+export const holdingsDB = dbModule.supabaseHoldingsDB;
+export const holdingSnapshotsDB = dbModule.supabaseHoldingSnapshotsDB;
+export const investmentAccountsDB = dbModule.supabaseInvestmentAccountsDB;
+export const investmentManagersDB = dbModule.supabaseInvestmentManagersDB;
+export const investmentTransactionsDB = dbModule.supabaseInvestmentTransactionsDB;
+export const cashTransactionsDB = dbModule.supabaseCashTransactionsDB;
 
-    getByCountry: async (country) =>
-        await db.providers.where('country').equals(country).toArray(),
+// ============ Import/Staging Services ============
+export const importStagingDB = dbModule.supabaseImportStagingDB;
+export const importRawDataDB = dbModule.supabaseImportRawDataDB;
+export const columnMappingsDB = dbModule.supabaseColumnMappingsDB;
 
-    getByType: async (type) =>
-        await db.providers.where('type').equals(type).toArray(),
+// ============ Rules & Configuration Services ============
+export const descriptionRulesDB = dbModule.supabaseDescriptionRulesDB;
 
-    add: async (provider) => {
-        const id = await db.providers.add(provider);
-        return await db.providers.get(id);
-    },
+// ============ User/Profile Services ============
+export const userProfileDB = dbModule.supabaseUserProfileDB;
+export const governmentBenefitsDB = dbModule.supabaseGovernmentBenefitsDB;
+export const profilesDB = dbModule.supabaseProfilesDB;
+export const userPreferencesDB = dbModule.supabaseUserPreferencesDB;
 
-    update: async (id, updates) => {
-        await db.providers.update(id, updates);
-        return await db.providers.get(id);
-    },
+// ============ Misc Services ============
+export const aiExtractionLogsDB = dbModule.supabaseAIExtractionLogsDB;
+export const providersDB = dbModule.supabaseProvidersDB;
+export const budgetsDB = dbModule.supabaseBudgetsDB;
+export const goalsDB = dbModule.supabaseGoalsDB;
+export const productsDB = dbModule.supabaseProductsDB;
+export const beliefTagsDB = dbModule.supabaseBeliefTagsDB;
+export const subscriptionHistoryDB = dbModule.supabaseSubscriptionHistoryDB;
+export const knowledgeDB = dbModule.supabaseKnowledgeDB;
+export const settingsDB = dbModule.supabaseSettingsDB;
+export const productMetadataDB = dbModule.supabaseProductMetadataDB;
 
-    delete: async (id) => {
-        await db.providers.delete(id);
-    }
-};
+// ============ Legacy Aliases (for backward compatibility) ============
+// These allow gradual migration - can be removed once all files are updated
+export const supabaseAccountsDB = accountsDB;
+export const supabaseTransactionsDB = transactionsDB;
+export const supabaseChartOfAccountsDB = chartOfAccountsDB;
+export const supabaseCategoryDB = categoryDB;
+export const supabaseMerchantDB = merchantDB;
+export const supabaseMerchantSplitRulesDB = merchantSplitRulesDB;
+export const supabaseTransactionSplitDB = transactionSplitDB;
+export const supabaseHoldingsDB = holdingsDB;
+export const supabaseHoldingSnapshotsDB = holdingSnapshotsDB;
+export const supabaseInvestmentAccountsDB = investmentAccountsDB;
+export const supabaseInvestmentManagersDB = investmentManagersDB;
+export const supabaseInvestmentTransactionsDB = investmentTransactionsDB;
+export const supabaseCashTransactionsDB = cashTransactionsDB;
+export const supabaseImportStagingDB = importStagingDB;
+export const supabaseImportRawDataDB = importRawDataDB;
+export const supabaseColumnMappingsDB = columnMappingsDB;
+export const supabaseDescriptionRulesDB = descriptionRulesDB;
+export const supabaseUserProfileDB = userProfileDB;
+export const supabaseGovernmentBenefitsDB = governmentBenefitsDB;
+export const supabaseProfilesDB = profilesDB;
+export const supabaseUserPreferencesDB = userPreferencesDB;
+export const supabaseAIExtractionLogsDB = aiExtractionLogsDB;
+export const supabaseProvidersDB = providersDB;
+export const supabaseBudgetsDB = budgetsDB;
+export const supabaseGoalsDB = goalsDB;
+export const supabaseProductsDB = productsDB;
+export const supabaseBeliefTagsDB = beliefTagsDB;
+export const supabaseSubscriptionHistoryDB = subscriptionHistoryDB;
+export const supabaseKnowledgeDB = knowledgeDB;
+export const supabaseSettingsDB = settingsDB;
+export const supabaseProductMetadataDB = productMetadataDB;
 
-// Accounts
-export const accountsDB = {
-    getAll: async () => await db.accounts.toArray(),
+// ============ Mode Utilities ============
+export const DB_MODE_CURRENT = DB_MODE;
+export const isPocketBase = DB_MODE === 'pocketbase';
+export const isSupabase = DB_MODE === 'supabase';
 
-    getAllWithProviders: async () => {
-        const accounts = await db.accounts.toArray();
-        const providers = await db.providers.toArray();
-
-        return accounts.map(account => ({
-            ...account,
-            provider: providers.find(p => p.id === account.providerId)
-        }));
-    },
-
-    getByCategory: async (category) =>
-        await db.accounts.where('accountCategory').equals(category).toArray(),
-
-    getByProvider: async (providerId) =>
-        await db.accounts.where('providerId').equals(providerId).toArray(),
-
-    getByCountry: async (country) =>
-        await db.accounts.where('country').equals(country).toArray(),
-
-    add: async (account) => {
-        const id = await db.accounts.add({
-            ...account,
-            createdAt: account.createdAt || new Date().toISOString()
-        });
-        return await db.accounts.get(id);
-    },
-
-    update: async (id, updates) => {
-        await db.accounts.update(id, updates);
-        return await db.accounts.get(id);
-    },
-
-    delete: async (id) => {
-        // Delete associated products and metadata
-        const products = await productsDB.getByAccount(id);
-        for (const product of products) {
-            await productsDB.delete(product.id);
-        }
-        await db.accounts.delete(id);
-    },
-
-    // Get account value (sum of all products)
-    getValue: async (accountId) => {
-        const products = await productsDB.getByAccount(accountId);
-        return products.reduce((sum, p) =>
-            sum + (p.quantity * p.currentPrice), 0
-        );
-    }
-};
-
-// Products
-export const productsDB = {
-    getAll: async () => await db.products.toArray(),
-
-    getByAccount: async (accountId) =>
-        await db.products.where('accountId').equals(accountId).toArray(),
-
-    getByType: async (productType) =>
-        await db.products.where('productType').equals(productType).toArray(),
-
-    getByAccountAndType: async (accountId, productType) =>
-        await db.products
-            .where(['accountId', 'productType'])
-            .equals([accountId, productType])
-            .toArray(),
-
-    add: async (product) => {
-        const id = await db.products.add(product);
-        return await db.products.get(id);
-    },
-
-    update: async (id, updates) => {
-        await db.products.update(id, updates);
-        return await db.products.get(id);
-    },
-
-    delete: async (id) => {
-        // Delete associated metadata
-        const metadata = await productMetadataDB.getByProduct(id);
-        for (const meta of metadata) {
-            await db.productMetadata.delete(meta.id);
-        }
-        await db.products.delete(id);
-    },
-
-    // Get product with metadata
-    getWithMetadata: async (id) => {
-        const product = await db.products.get(id);
-        if (product) {
-            const metadata = await productMetadataDB.getByProduct(id);
-            product.metadata = {};
-            metadata.forEach(m => {
-                product.metadata[m.key] = m.value;
-            });
-        }
-        return product;
-    },
-
-    // Get current value
-    getValue: async (id) => {
-        const product = await db.products.get(id);
-        return product ? product.quantity * product.currentPrice : 0;
-    },
-
-    // Get gain/loss
-    getGainLoss: async (id) => {
-        const product = await db.products.get(id);
-        if (!product) return 0;
-        const currentValue = product.quantity * product.currentPrice;
-        const purchaseValue = product.quantity * product.purchasePrice;
-        return currentValue - purchaseValue;
-    }
-};
-
-// Product Metadata
-export const productMetadataDB = {
-    getByProduct: async (productId) =>
-        await db.productMetadata.where('productId').equals(productId).toArray(),
-
-    get: async (productId, key) =>
-        await db.productMetadata
-            .where(['productId', 'key'])
-            .equals([productId, key])
-            .first(),
-
-    set: async (productId, key, value) => {
-        const existing = await productMetadataDB.get(productId, key);
-        if (existing) {
-            await db.productMetadata.update(existing.id, { value });
-        } else {
-            await db.productMetadata.add({ productId, key, value });
-        }
-    },
-
-    delete: async (productId, key) => {
-        const existing = await productMetadataDB.get(productId, key);
-        if (existing) {
-            await db.productMetadata.delete(existing.id);
-        }
-    }
-};
-
-// Transactions
-export const transactionsDB = {
-    getAll: async () =>
-        await db.transactions.orderBy('date').reverse().toArray(),
-
-    getByAccount: async (accountId) =>
-        await db.transactions
-            .where('accountId')
-            .equals(accountId)
-            .reverse()
-            .toArray(),
-
-    getByProduct: async (productId) =>
-        await db.transactions
-            .where('productId')
-            .equals(productId)
-            .reverse()
-            .toArray(),
-
-    getByDateRange: async (startDate, endDate) =>
-        await db.transactions
-            .where('date')
-            .between(startDate, endDate)
-            .toArray(),
-
-    getByType: async (type) =>
-        await db.transactions.where('type').equals(type).toArray(),
-
-    add: async (transaction) => {
-        const id = await db.transactions.add({
-            ...transaction,
-            date: transaction.date || new Date().toISOString()
-        });
-        return await db.transactions.get(id);
-    },
-
-    bulkAdd: async (transactions) => {
-        await db.transactions.bulkAdd(transactions);
-    },
-
-    update: async (id, updates) => {
-        await db.transactions.update(id, updates);
-        return await db.transactions.get(id);
-    },
-
-    delete: async (id) => {
-        await db.transactions.delete(id);
-    }
-};
-
-export default db;
+// ============ Auth/User Utilities ============
+export const getDefaultUserId = dbModule.getDefaultUserId;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabaseUserProfileDB } from '../../services/pocketbaseDatabase';
+import { userProfileDB } from '../../services/database';
 import {
     User,
     Calendar,
@@ -12,8 +12,10 @@ import {
     Save,
     Loader,
     AlertCircle,
-    CheckCircle
+    CheckCircle,
+    X
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const PROVINCES = [
     { value: 'AB', label: 'Alberta' },
@@ -54,12 +56,14 @@ const RISK_TOLERANCE = [
     { value: 'aggressive', label: 'Aggressive - Maximum growth, high risk tolerance' }
 ];
 
-export const UserProfileSettings = () => {
+export const UserProfileSettings = ({ onClose }) => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
+    const [originalProfile, setOriginalProfile] = useState(null);
     const [profile, setProfile] = useState({
         date_of_birth: '',
         province: 'ON',
@@ -85,6 +89,15 @@ export const UserProfileSettings = () => {
         loadProfile();
     }, [user]);
 
+    // Helper to format date from PocketBase (ISO with time) to yyyy-MM-dd for input
+    const formatDateForInput = (dateStr) => {
+        if (!dateStr) return '';
+        // Handle ISO format like "1972-02-03 00:00:00.000Z" or "1972-02-03T00:00:00.000Z"
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return '';
+        return date.toISOString().split('T')[0];
+    };
+
     const loadProfile = async () => {
         if (!user) return;
 
@@ -92,13 +105,13 @@ export const UserProfileSettings = () => {
         setError(null);
 
         try {
-            const data = await supabaseUserProfileDB.getProfile();
+            const data = await userProfileDB.getProfile();
             if (data) {
-                setProfile({
+                const loadedProfile = {
                     ...profile,
                     ...data,
-                    date_of_birth: data.date_of_birth || '',
-                    spouse_date_of_birth: data.spouse_date_of_birth || '',
+                    date_of_birth: formatDateForInput(data.date_of_birth),
+                    spouse_date_of_birth: formatDateForInput(data.spouse_date_of_birth),
                     current_annual_income: data.current_annual_income || '',
                     spouse_annual_income: data.spouse_annual_income || '',
                     desired_retirement_income: data.desired_retirement_income || '',
@@ -107,7 +120,12 @@ export const UserProfileSettings = () => {
                     rrsp_contribution_room: data.rrsp_contribution_room || '',
                     rrsp_unused_room: data.rrsp_unused_room || '',
                     tfsa_contribution_room: data.tfsa_contribution_room || ''
-                });
+                };
+                setProfile(loadedProfile);
+                setOriginalProfile(loadedProfile);
+            } else {
+                // No profile exists yet, set original to current defaults
+                setOriginalProfile(profile);
             }
         } catch (err) {
             console.error('Error loading profile:', err);
@@ -121,6 +139,24 @@ export const UserProfileSettings = () => {
         const { name, value } = e.target;
         setProfile(prev => ({ ...prev, [name]: value }));
         setSuccess(false);
+    };
+
+    // Check if profile has changed from original
+    const hasChanges = () => {
+        if (!originalProfile) return false;
+        return JSON.stringify(profile) !== JSON.stringify(originalProfile);
+    };
+
+    const handleCancel = () => {
+        if (onClose) {
+            onClose();
+        } else {
+            // Reset to original and navigate back
+            if (originalProfile) {
+                setProfile(originalProfile);
+            }
+            navigate(-1);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -148,7 +184,7 @@ export const UserProfileSettings = () => {
                 spouse_date_of_birth: profile.spouse_date_of_birth || null
             };
 
-            await supabaseUserProfileDB.upsertProfile(profileData);
+            await userProfileDB.upsertProfile(profileData);
             setSuccess(true);
             setTimeout(() => setSuccess(false), 3000);
         } catch (err) {
@@ -490,11 +526,19 @@ export const UserProfileSettings = () => {
                     </div>
                 </div>
 
-                {/* Save Button */}
-                <div className="flex justify-end">
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3">
+                    <button
+                        type="button"
+                        onClick={handleCancel}
+                        className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 font-medium"
+                    >
+                        <X className="w-5 h-5" />
+                        Cancel
+                    </button>
                     <button
                         type="submit"
-                        disabled={saving}
+                        disabled={saving || !hasChanges()}
                         className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
                     >
                         {saving ? (

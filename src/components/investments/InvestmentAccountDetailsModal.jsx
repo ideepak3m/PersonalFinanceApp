@@ -2,10 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, Receipt, PieChart, Calendar, Filter, Download, ChevronDown, ChevronUp, Building2, Clock, Plus, Minus, DollarSign } from 'lucide-react';
 import {
-    supabaseHoldingsDB,
-    supabaseInvestmentTransactionsDB,
-    supabaseCashTransactionsDB
-} from '../../services/pocketbaseDatabase';
+    holdingsDB,
+    investmentTransactionsDB,
+    cashTransactionsDB
+} from '../../services/database';
 
 const InvestmentAccountDetailsModal = ({ account, onClose }) => {
     const [activeTab, setActiveTab] = useState('holdings');
@@ -30,21 +30,21 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
             const accountId = account.supabase_id || account.id;
 
             // Load holdings for this account
-            const allHoldings = await supabaseHoldingsDB.getAll();
+            const allHoldings = await holdingsDB.getAll();
             const holdingsData = (allHoldings || []).filter(h =>
                 h.account_id === accountId || h.account_id === account.id
             ).sort((a, b) => new Date(b.as_of_date) - new Date(a.as_of_date));
             setHoldings(holdingsData);
 
             // Load investment transactions for this account
-            const allTxns = await supabaseInvestmentTransactionsDB.getAll();
+            const allTxns = await investmentTransactionsDB.getAll();
             const txnData = (allTxns || []).filter(t =>
                 t.account_id === accountId || t.account_id === account.id
             ).sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
             setTransactions(txnData);
 
             // Load cash transactions (fees, etc.) for this account
-            const allCashTxns = await supabaseCashTransactionsDB.getAll();
+            const allCashTxns = await cashTransactionsDB.getAll();
             const cashData = (allCashTxns || []).filter(t =>
                 t.account_id === accountId || t.account_id === account.id
             ).sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));

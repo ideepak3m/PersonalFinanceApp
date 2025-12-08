@@ -4,13 +4,13 @@
  */
 
 import {
-    supabaseInvestmentManagersDB,
-    supabaseInvestmentAccountsDB,
-    supabaseHoldingsDB,
-    supabaseCashTransactionsDB,
-    supabaseInvestmentTransactionsDB,
+    investmentManagersDB,
+    investmentAccountsDB,
+    holdingsDB,
+    cashTransactionsDB,
+    investmentTransactionsDB,
     getDefaultUserId
-} from './pocketbaseDatabase';
+} from './database';
 
 // Helper function to format date string properly without timezone shift
 const formatDateString = (dateStr) => {
@@ -40,7 +40,7 @@ const formatDateString = (dateStr) => {
 // Get all investment managers for the current user
 export const getInvestmentManagers = async () => {
     try {
-        const managers = await supabaseInvestmentManagersDB.getAll();
+        const managers = await investmentManagersDB.getAll();
         // Sort by name
         const sorted = (managers || []).sort((a, b) =>
             (a.name || '').localeCompare(b.name || '')
@@ -58,7 +58,7 @@ export const createInvestmentManager = async (managerData) => {
         const userId = await getDefaultUserId();
         if (!userId) throw new Error('User not authenticated');
 
-        const data = await supabaseInvestmentManagersDB.add({
+        const data = await investmentManagersDB.add({
             user_id: userId,
             name: managerData.name,
             manager_type: managerData.managerType || 'Advisor',
@@ -88,7 +88,7 @@ export const saveAccountInfo = async (accountInfo) => {
         if (!userId) throw new Error('User not authenticated');
 
         // Check if account already exists
-        const allAccounts = await supabaseInvestmentAccountsDB.getAll();
+        const allAccounts = await investmentAccountsDB.getAll();
         const existing = (allAccounts || []).find(a =>
             a.account_number === accountInfo.accountNumber &&
             a.institution === accountInfo.institution
@@ -109,9 +109,9 @@ export const saveAccountInfo = async (accountInfo) => {
 
         let data;
         if (existing) {
-            data = await supabaseInvestmentAccountsDB.update(existing.id, accountData);
+            data = await investmentAccountsDB.update(existing.id, accountData);
         } else {
-            data = await supabaseInvestmentAccountsDB.add(accountData);
+            data = await investmentAccountsDB.add(accountData);
         }
 
         console.log('✅ Account info saved:', data);
@@ -129,12 +129,12 @@ export const saveHoldings = async (accountId, holdingsRows, asOfDate, accountInf
         if (!userId) throw new Error('User not authenticated');
 
         // Delete existing holdings for this account and date
-        const existingHoldings = await supabaseHoldingsDB.getAll();
+        const existingHoldings = await holdingsDB.getAll();
         const toDelete = (existingHoldings || []).filter(h =>
             h.account_id === accountId && h.as_of_date === asOfDate
         );
         for (const h of toDelete) {
-            await supabaseHoldingsDB.delete(h.id);
+            await holdingsDB.delete(h.id);
         }
 
         // Prepare and insert holdings data
@@ -167,7 +167,7 @@ export const saveHoldings = async (accountId, holdingsRows, asOfDate, accountInf
                 institution: accountInfo.institution || null
             };
 
-            const saved = await supabaseHoldingsDB.add(holdingData);
+            const saved = await holdingsDB.add(holdingData);
             savedHoldings.push(saved);
         }
 
@@ -197,7 +197,7 @@ export const saveCashTransactions = async (accountId, transactionRows) => {
         }
 
         // Get existing transactions to check for duplicates
-        const existingTxns = await supabaseCashTransactionsDB.getAll();
+        const existingTxns = await cashTransactionsDB.getAll();
         const existingSet = new Set(
             (existingTxns || []).filter(t => t.account_id === accountId).map(t =>
                 `${t.transaction_date}|${t.description}|${t.debit}|${t.credit}`
@@ -219,7 +219,7 @@ export const saveCashTransactions = async (accountId, transactionRows) => {
 
             const key = `${txnData.transaction_date}|${txnData.description}|${txnData.debit}|${txnData.credit}`;
             if (!existingSet.has(key)) {
-                const saved = await supabaseCashTransactionsDB.add(txnData);
+                const saved = await cashTransactionsDB.add(txnData);
                 savedTransactions.push(saved);
                 existingSet.add(key);
             }
@@ -251,7 +251,7 @@ export const saveInvestmentTransactions = async (accountId, transactionRows) => 
         }
 
         // Get existing transactions to check for duplicates
-        const existingTxns = await supabaseInvestmentTransactionsDB.getAll();
+        const existingTxns = await investmentTransactionsDB.getAll();
         const existingSet = new Set(
             (existingTxns || []).filter(t => t.account_id === accountId).map(t =>
                 `${t.transaction_date}|${t.symbol || ''}|${t.transaction_type}|${t.units || ''}|${t.amount}`
@@ -276,7 +276,7 @@ export const saveInvestmentTransactions = async (accountId, transactionRows) => 
 
             const key = `${txnData.transaction_date}|${txnData.symbol || ''}|${txnData.transaction_type}|${txnData.units || ''}|${txnData.amount}`;
             if (!existingSet.has(key)) {
-                const saved = await supabaseInvestmentTransactionsDB.add(txnData);
+                const saved = await investmentTransactionsDB.add(txnData);
                 savedTransactions.push(saved);
                 existingSet.add(key);
             }
@@ -423,8 +423,8 @@ const classifyInvestmentType = (description) => {
 // Get all investment accounts for the current user (with manager info)
 export const getInvestmentAccounts = async () => {
     try {
-        const accounts = await supabaseInvestmentAccountsDB.getAll();
-        const managers = await supabaseInvestmentManagersDB.getAll();
+        const accounts = await investmentAccountsDB.getAll();
+        const managers = await investmentManagersDB.getAll();
 
         // Create manager lookup using supabase_id as key (for original UUID references)
         const managerMap = {};
@@ -468,7 +468,7 @@ const buildAccountIdMaps = (accounts) => {
 // Get last transaction date for each investment account
 export const getLastTransactionDates = async () => {
     try {
-        const accounts = await supabaseInvestmentAccountsDB.getAll();
+        const accounts = await investmentAccountsDB.getAll();
         const { supabaseToId } = buildAccountIdMaps(accounts);
         // Get all supabase_ids and PocketBase ids for filtering
         const allAccountIds = (accounts || []).flatMap(a => [a.id, a.supabase_id].filter(Boolean));
@@ -477,7 +477,7 @@ export const getLastTransactionDates = async () => {
             return { success: true, dates: {} };
         }
 
-        const allTxns = await supabaseInvestmentTransactionsDB.getAll();
+        const allTxns = await investmentTransactionsDB.getAll();
         const txns = (allTxns || []).filter(t => allAccountIds.includes(t.account_id))
             .sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
 
@@ -500,7 +500,7 @@ export const getLastTransactionDates = async () => {
 // Get last holdings date for each investment account
 export const getLastHoldingsDates = async () => {
     try {
-        const accounts = await supabaseInvestmentAccountsDB.getAll();
+        const accounts = await investmentAccountsDB.getAll();
         const { supabaseToId } = buildAccountIdMaps(accounts);
         const allAccountIds = (accounts || []).flatMap(a => [a.id, a.supabase_id].filter(Boolean));
 
@@ -508,7 +508,7 @@ export const getLastHoldingsDates = async () => {
             return { success: true, dates: {} };
         }
 
-        const allHoldings = await supabaseHoldingsDB.getAll();
+        const allHoldings = await holdingsDB.getAll();
         const holdings = (allHoldings || []).filter(h => allAccountIds.includes(h.account_id))
             .sort((a, b) => new Date(b.as_of_date) - new Date(a.as_of_date));
 
@@ -530,7 +530,7 @@ export const getLastHoldingsDates = async () => {
 // Get latest market value for each investment account
 export const getLatestMarketValues = async () => {
     try {
-        const accounts = await supabaseInvestmentAccountsDB.getAll();
+        const accounts = await investmentAccountsDB.getAll();
         const { supabaseToId } = buildAccountIdMaps(accounts);
         const allAccountIds = (accounts || []).flatMap(a => [a.id, a.supabase_id].filter(Boolean));
 
@@ -538,7 +538,7 @@ export const getLatestMarketValues = async () => {
             return { success: true, values: {} };
         }
 
-        const allHoldings = await supabaseHoldingsDB.getAll();
+        const allHoldings = await holdingsDB.getAll();
         const holdings = (allHoldings || []).filter(h => allAccountIds.includes(h.account_id))
             .sort((a, b) => new Date(b.as_of_date) - new Date(a.as_of_date));
 
@@ -571,7 +571,7 @@ export const getLatestMarketValues = async () => {
 // Get existing holdings for an account
 export const getHoldingsForAccount = async (accountId, supabaseId = null) => {
     try {
-        const allHoldings = await supabaseHoldingsDB.getAll();
+        const allHoldings = await holdingsDB.getAll();
         // Match by either accountId or supabaseId
         const idsToMatch = [accountId, supabaseId].filter(Boolean);
         const holdings = (allHoldings || []).filter(h => idsToMatch.includes(h.account_id))
@@ -587,7 +587,7 @@ export const getHoldingsForAccount = async (accountId, supabaseId = null) => {
 // Get existing cash transactions for an account
 export const getCashTransactionsForAccount = async (accountId) => {
     try {
-        const allTxns = await supabaseCashTransactionsDB.getAll();
+        const allTxns = await cashTransactionsDB.getAll();
         const transactions = (allTxns || []).filter(t => t.account_id === accountId)
             .sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
 
@@ -601,7 +601,7 @@ export const getCashTransactionsForAccount = async (accountId) => {
 // Get existing investment transactions for an account
 export const getInvestmentTransactionsForAccount = async (accountId) => {
     try {
-        const allTxns = await supabaseInvestmentTransactionsDB.getAll();
+        const allTxns = await investmentTransactionsDB.getAll();
         const transactions = (allTxns || []).filter(t => t.account_id === accountId)
             .sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
 
@@ -615,7 +615,7 @@ export const getInvestmentTransactionsForAccount = async (accountId) => {
 // Find account by account number and institution
 export const findAccountByNumber = async (accountNumber, institution) => {
     try {
-        const accounts = await supabaseInvestmentAccountsDB.getAll();
+        const accounts = await investmentAccountsDB.getAll();
         const account = (accounts || []).find(a =>
             a.account_number === accountNumber && a.institution === institution
         );
@@ -630,7 +630,7 @@ export const findAccountByNumber = async (accountNumber, institution) => {
 // Update investment account
 export const updateInvestmentAccount = async (accountId, updates) => {
     try {
-        const data = await supabaseInvestmentAccountsDB.update(accountId, {
+        const data = await investmentAccountsDB.update(accountId, {
             display_name: updates.displayName,
             manager_id: updates.managerId || null,
             updated_at: new Date().toISOString()

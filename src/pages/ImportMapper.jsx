@@ -3,13 +3,13 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import {
-    supabaseImportStagingDB,
-    supabaseImportRawDataDB,
-    supabaseColumnMappingsDB,
-    supabaseAccountsDB,
-    supabaseTransactionsDB,
-    supabaseChartOfAccountsDB
-} from '../services/pocketbaseDatabase';
+    importStagingDB,
+    importRawDataDB,
+    columnMappingsDB,
+    accountsDB,
+    transactionsDB,
+    chartOfAccountsDB
+} from '../services/database';
 
 export const ImportMapper = () => {
     const { accountId } = useParams();
@@ -44,10 +44,10 @@ export const ImportMapper = () => {
             setLoading(true);
 
             const [acc, staging, mappings, coa] = await Promise.all([
-                supabaseAccountsDB.getById(accountId),
-                supabaseImportStagingDB.getPendingByAccount(accountId),
-                supabaseColumnMappingsDB.getByAccountAndType(accountId, 'csv'),
-                supabaseChartOfAccountsDB.getAll()
+                accountsDB.getById(accountId),
+                importStagingDB.getPendingByAccount(accountId),
+                columnMappingsDB.getByAccountAndType(accountId, 'csv'),
+                chartOfAccountsDB.getAll()
             ]);
 
             setAccount(acc);
@@ -74,11 +74,11 @@ export const ImportMapper = () => {
             setSelectedStaging(staging);
 
             // Load raw data
-            const data = await supabaseImportRawDataDB.getByStagingId(staging.id);
+            const data = await importRawDataDB.getByStagingId(staging.id);
             setRawData(data || []);
 
             // Try to load default mapping
-            const defaultMapping = await supabaseColumnMappingsDB.getDefaultMapping(
+            const defaultMapping = await columnMappingsDB.getDefaultMapping(
                 accountId,
                 staging.file_type
             );
@@ -106,10 +106,10 @@ export const ImportMapper = () => {
 
         try {
             // Delete raw data first (foreign key constraint)
-            await supabaseImportRawDataDB.deleteByStagingId(stagingId);
+            await importRawDataDB.deleteByStagingId(stagingId);
 
             // Delete staging record
-            await supabaseImportStagingDB.delete(stagingId);
+            await importStagingDB.delete(stagingId);
 
             // Update local state
             const updatedRecords = stagingRecords.filter(s => s.id !== stagingId);
@@ -192,7 +192,7 @@ export const ImportMapper = () => {
             const name = prompt('Enter a name for this mapping configuration:');
             if (!name) return;
 
-            await supabaseColumnMappingsDB.add({
+            await columnMappingsDB.add({
                 account_id: accountId,
                 file_type: selectedStaging.file_type,
                 name: name,
@@ -200,7 +200,7 @@ export const ImportMapper = () => {
             });
 
             alert('Mapping saved successfully!');
-            const mappings = await supabaseColumnMappingsDB.getByAccountAndType(accountId, selectedStaging.file_type);
+            const mappings = await columnMappingsDB.getByAccountAndType(accountId, selectedStaging.file_type);
             setSavedMappings(mappings || []);
         } catch (error) {
             console.error('Error saving mapping:', error);
@@ -210,7 +210,7 @@ export const ImportMapper = () => {
 
     const handleLoadMapping = async (mappingId) => {
         try {
-            const mapping = await supabaseColumnMappingsDB.getById(mappingId);
+            const mapping = await columnMappingsDB.getById(mappingId);
             setColumnMappings(mapping.mapping_config);
         } catch (error) {
             console.error('Error loading mapping:', error);
@@ -297,10 +297,10 @@ export const ImportMapper = () => {
             });
 
             // Bulk insert to transactions table
-            await supabaseTransactionsDB.bulkAdd(transactions);
+            await transactionsDB.bulkAdd(transactions);
 
             // Update staging status
-            await supabaseImportStagingDB.updateStatus(selectedStaging.id, 'imported');
+            await importStagingDB.updateStatus(selectedStaging.id, 'imported');
 
             // Prompt to save mapping if not already saved
             const shouldSaveMapping = window.confirm(
@@ -311,7 +311,7 @@ export const ImportMapper = () => {
                 const mappingName = window.prompt('Enter a name for this mapping:', selectedStaging.file_name.replace(/\.[^/.]+$/, ''));
                 if (mappingName) {
                     try {
-                        await supabaseColumnMappingsDB.add({
+                        await columnMappingsDB.add({
                             account_id: accountId,
                             file_type: selectedStaging.file_type,
                             name: mappingName,
@@ -330,7 +330,7 @@ export const ImportMapper = () => {
         } catch (error) {
             console.error('Error applying mapping:', error);
             alert('Failed to import transactions: ' + error.message);
-            await supabaseImportStagingDB.updateStatus(
+            await importStagingDB.updateStatus(
                 selectedStaging.id,
                 'failed',
                 error.message

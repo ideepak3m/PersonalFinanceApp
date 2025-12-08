@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
 import {
-    supabaseTransactionsDB,
-    supabaseCategoryDB,
-    supabaseChartOfAccountsDB
-} from '../../services/pocketbaseDatabase';
+    transactionsDB,
+    categoryDB,
+    chartOfAccountsDB
+} from '../../services/database';
 import {
     PieChart,
     BarChart3,
@@ -29,7 +28,6 @@ const MONTHS = [
 ];
 
 export const ExpenseAnalysis = () => {
-    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [transactions, setTransactions] = useState([]);
@@ -43,10 +41,8 @@ export const ExpenseAnalysis = () => {
     const [editingCoaId, setEditingCoaId] = useState(null); // Selected COA for edit
 
     useEffect(() => {
-        if (user) {
-            loadData();
-        }
-    }, [user, selectedYear]);
+        loadData();
+    }, [selectedYear]);
 
     const loadData = async () => {
         setLoading(true);
@@ -56,11 +52,11 @@ export const ExpenseAnalysis = () => {
             console.log('ExpenseAnalysis: Starting to load data...');
 
             // Load categories and chart of accounts first (for lookups)
-            const cats = await supabaseCategoryDB.getAll();
+            const cats = await categoryDB.getAll();
             console.log('ExpenseAnalysis: Categories loaded:', cats?.length);
             setCategories(cats || []);
 
-            const coa = await supabaseChartOfAccountsDB.getAll();
+            const coa = await chartOfAccountsDB.getAll();
             console.log('ExpenseAnalysis: Chart of Accounts loaded:', coa?.length);
             // Sort COA alphabetically by name
             const sortedCoa = (coa || []).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -85,7 +81,7 @@ export const ExpenseAnalysis = () => {
             const endDate = `${selectedYear}-12-31`;
             console.log('ExpenseAnalysis: Loading transactions for', startDate, 'to', endDate);
 
-            const allTxns = await supabaseTransactionsDB.getAll();
+            const allTxns = await transactionsDB.getAll();
             console.log('ExpenseAnalysis: All transactions loaded:', allTxns?.length);
 
             // Filter by date range and user
@@ -149,7 +145,7 @@ export const ExpenseAnalysis = () => {
             // Get the PocketBase ID for the transaction (it might be passed as supabase_id)
             const txnPbId = transactions.find(t => t.id === txnId || t.supabase_id === txnId)?.id || txnId;
 
-            await supabaseTransactionsDB.update(txnPbId, { chart_of_account_id: coaIdForTransaction });
+            await transactionsDB.update(txnPbId, { chart_of_account_id: coaIdForTransaction });
 
             // Update local state
             setTransactions(prev => prev.map(t => {

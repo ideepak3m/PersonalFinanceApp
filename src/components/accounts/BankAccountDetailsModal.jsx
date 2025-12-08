@@ -1,7 +1,7 @@
 // src/components/accounts/BankAccountDetailsModal.jsx
 import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, Receipt, PieChart, Calendar, Filter, ChevronDown, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
-import { supabaseTransactionsDB } from '../../services/pocketbaseDatabase';
+import { transactionsDB } from '../../services/database';
 
 const BankAccountDetailsModal = ({ account, onClose }) => {
     const [activeTab, setActiveTab] = useState('transactions');
@@ -18,7 +18,7 @@ const BankAccountDetailsModal = ({ account, onClose }) => {
     const loadTransactions = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabaseTransactionsDB.table()
+            const { data, error } = await transactionsDB.table()
                 .select('*')
                 .eq('account_id', account.id)
                 .order('date', { ascending: false });

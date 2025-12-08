@@ -2,10 +2,10 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
 import {
-    supabaseMerchantSplitRulesDB,
-    supabaseChartOfAccountsDB,
-    supabaseMerchantDB
-} from '../services/pocketbaseDatabase';
+    merchantSplitRulesDB,
+    chartOfAccountsDB,
+    merchantDB
+} from '../services/database';
 import './MerchantSplitRules.css';
 
 export const MerchantSplitRules = () => {
@@ -29,9 +29,9 @@ export const MerchantSplitRules = () => {
         try {
             setLoading(true);
             const [rules, coa, merchs] = await Promise.all([
-                supabaseMerchantSplitRulesDB.getAll(),
-                supabaseChartOfAccountsDB.getAll(),
-                supabaseMerchantDB.getAll()
+                merchantSplitRulesDB.getAll(),
+                chartOfAccountsDB.getAll(),
+                merchantDB.getAll()
             ]);
 
             setSplitRules(rules || []);
@@ -89,7 +89,7 @@ export const MerchantSplitRules = () => {
 
         try {
             setLoading(true);
-            await supabaseMerchantSplitRulesDB.delete(ruleId);
+            await merchantSplitRulesDB.delete(ruleId);
             await loadData();
             alert('Split rule deleted successfully');
         } catch (error) {
@@ -161,11 +161,11 @@ export const MerchantSplitRules = () => {
 
             if (editingRule) {
                 // Update existing rule
-                await supabaseMerchantSplitRulesDB.update(editingRule.id, ruleData);
+                await merchantSplitRulesDB.update(editingRule.id, ruleData);
                 alert('Split rule updated successfully');
             } else {
                 // Add new rule
-                await supabaseMerchantSplitRulesDB.add(ruleData);
+                await merchantSplitRulesDB.add(ruleData);
                 alert('Split rule added successfully');
             }
 

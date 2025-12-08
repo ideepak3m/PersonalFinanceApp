@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
 import {
-    supabaseInvestmentAccountsDB,
-    supabaseHoldingsDB
-} from '../../services/pocketbaseDatabase';
+    investmentAccountsDB,
+    holdingsDB
+} from '../../services/database';
 import {
     TrendingUp,
     Calendar,
@@ -19,7 +18,6 @@ import {
 } from 'lucide-react';
 
 export const InvestmentGrowth = () => {
-    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [holdings, setHoldings] = useState([]);
@@ -27,10 +25,8 @@ export const InvestmentGrowth = () => {
     const [selectedAccountType, setSelectedAccountType] = useState('all');
 
     useEffect(() => {
-        if (user) {
-            loadData();
-        }
-    }, [user]);
+        loadData();
+    }, []);
 
     const loadData = async () => {
         setLoading(true);
@@ -38,7 +34,7 @@ export const InvestmentGrowth = () => {
 
         try {
             // Load accounts
-            const accts = await supabaseInvestmentAccountsDB.getAll();
+            const accts = await investmentAccountsDB.getAll();
             setAccounts(accts || []);
 
             // Create accounts lookup map using supabase_id (original UUID) as the key
@@ -50,7 +46,7 @@ export const InvestmentGrowth = () => {
             });
 
             // Load all holdings
-            const holdingsData = await supabaseHoldingsDB.getAll();
+            const holdingsData = await holdingsDB.getAll();
 
             // Enrich holdings with account data and sort by date
             const enrichedHoldings = (holdingsData || []).map(h => ({

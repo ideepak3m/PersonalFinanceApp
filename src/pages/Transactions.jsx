@@ -1,19 +1,16 @@
-// src/pages/Transactions.jsx - Updated with merchant/category split logic
+// src/pages/Transactions.jsx - Transaction listing with filters
 
 import React, { useEffect, useState } from 'react';
-import { TransactionUpload } from '../components/transactions/TransactionUpload';
 import { SplitModal } from '../components/transactions/SplitModal';
 import { MerchantSelector } from '../components/transactions/MerchantSelector';
-import transactionService from '../services/transactionService';
-import { transactionLogic } from '../services/transactionBusinessLogic';
 import {
-    supabaseAccountsDB,
-    supabaseTransactionsDB,
-    supabaseChartOfAccountsDB,
-    supabaseMerchantDB,
-    supabaseCategoryDB
-} from '../services/pocketbaseDatabase';
-import { Search, Edit2, Trash2, Save, Split } from 'lucide-react';
+    accountsDB,
+    transactionsDB,
+    chartOfAccountsDB,
+    merchantDB,
+    categoryDB
+} from '../services/database';
+import { Search, Edit2, Trash2, Split } from 'lucide-react';
 
 export const Transactions = () => {
     const [accounts, setAccounts] = useState([]);
@@ -26,31 +23,46 @@ export const Transactions = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedAccount, setSelectedAccount] = useState('all');
 
-    // Pending transactions (not saved to DB yet)
-    const [pendingTransactions, setPendingTransactions] = useState([]);
+    // Filters - default to last 30 days
+    const [selectedAccountType, setSelectedAccountType] = useState('all');
+    const [startDate, setStartDate] = useState(() => {
+        const date = new Date();
+        date.setDate(date.getDate() - 30);
+        return date.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => {
+        return new Date().toISOString().split('T')[0];
+    });
+    const [activePreset, setActivePreset] = useState('last30');
 
     // Split modal
     const [splitTransaction, setSplitTransaction] = useState(null);
     const [showSplitModal, setShowSplitModal] = useState(false);
 
-    // Load data
-    useEffect(() => {
-        loadData();
-    }, [refresh]);
+    // Track if search has been triggered
+    const [hasSearched, setHasSearched] = useState(false);
 
-    const loadData = async () => {
+    // Load reference data (accounts, categories, etc.) once
+    useEffect(() => {
+        loadReferenceData();
+    }, []);
+
+    // Handle search button click
+    const handleSearch = () => {
+        setHasSearched(true);
+        loadTransactions();
+    };
+
+    const loadReferenceData = async () => {
         try {
-            setLoading(true);
-            const [accs, txns, coa, cats, merchs] = await Promise.all([
-                supabaseAccountsDB.getAll(),
-                supabaseTransactionsDB.getAllWithRelations(),
-                supabaseChartOfAccountsDB.getAll(),
-                supabaseCategoryDB.getAll(),
-                supabaseMerchantDB.getAll()
+            const [accs, coa, cats, merchs] = await Promise.all([
+                accountsDB.getAll(),
+                chartOfAccountsDB.getAll(),
+                categoryDB.getAll(),
+                merchantDB.getAll()
             ]);
 
             setAccounts(accs || []);
-            setTransactions(txns || []);
 
             // Sort Chart of Accounts alphabetically by NAME
             const sortedCoa = (coa || []).sort((a, b) => {
@@ -61,8 +73,41 @@ export const Transactions = () => {
             setCategories(cats || []);
             setMerchants(merchs || []);
         } catch (error) {
-            console.error('Error loading data:', error);
-            alert('Failed to load data');
+            console.error('Error loading reference data:', error);
+        }
+    };
+
+    const loadTransactions = async () => {
+        try {
+            setLoading(true);
+
+            // Build account IDs filter based on account type
+            let accountIds = null;
+            if (selectedAccountType !== 'all' && selectedAccount === 'all') {
+                // Filter by account type - get IDs of matching accounts
+                accountIds = accounts
+                    .filter(acc => acc.account_type === selectedAccountType)
+                    .map(acc => acc.id);
+
+                if (accountIds.length === 0) {
+                    setTransactions([]);
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            const txns = await transactionsDB.getFiltered({
+                startDate: startDate || undefined,
+                endDate: endDate || undefined,
+                accountId: selectedAccount !== 'all' ? selectedAccount : undefined,
+                accountIds: accountIds,
+                searchTerm: searchTerm || undefined
+            });
+
+            setTransactions(txns || []);
+        } catch (error) {
+            console.error('Error loading transactions:', error);
+            alert('Failed to load transactions');
         } finally {
             setLoading(false);
         }
@@ -257,7 +302,7 @@ export const Transactions = () => {
     // Handle merchant linking
     const handleMerchantSelected = async (transactionId, merchantId) => {
         try {
-            await supabaseTransactionsDB.update(transactionId, {
+            await transactionsDB.update(transactionId, {
                 normalized_merchant_id: merchantId
             });
             await loadData();
@@ -269,7 +314,7 @@ export const Transactions = () => {
 
     const handleCreateMerchant = async (friendlyName, rawName) => {
         try {
-            const newMerchant = await supabaseMerchantDB.add({
+            const newMerchant = await merchantDB.add({
                 normalized_name: friendlyName,
                 aliases: [rawName]
             });
@@ -289,7 +334,7 @@ export const Transactions = () => {
         try {
             if (txn.id) {
                 // Saved transaction - delete from DB
-                await supabaseTransactionsDB.delete(txn.id);
+                await transactionsDB.delete(txn.id);
                 setRefresh(r => r + 1);
             } else {
                 // Pending transaction - just remove from list
@@ -321,95 +366,180 @@ export const Transactions = () => {
         return 'bg-green-50 hover:bg-green-100';
     };
 
-    // Combine pending and saved transactions for display
-    const allTransactions = [...pendingTransactions, ...transactions];
+    // Get unique account types for filter dropdown
+    const accountTypes = [...new Set(accounts.map(acc => acc.account_type).filter(Boolean))];
 
-    // Filter transactions
-    const filteredTransactions = allTransactions.filter(txn => {
-        if (selectedAccount !== 'all' && txn.account_id !== selectedAccount) {
-            return false;
-        }
-        if (searchTerm) {
-            const lower = searchTerm.toLowerCase();
-            return (
-                txn.description?.toLowerCase().includes(lower) ||
-                txn.raw_merchant_name?.toLowerCase().includes(lower) ||
-                txn.merchant?.normalized_name?.toLowerCase().includes(lower)
-            );
-        }
-        return true;
-    });
+    // Date preset handlers
+    const handleThisMonth = () => {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        setStartDate(firstDay.toISOString().split('T')[0]);
+        setEndDate(today.toISOString().split('T')[0]);
+        setActivePreset('thisMonth');
+    };
 
-    // Count pending transactions that are ready to save
-    const readyToSaveCount = pendingTransactions.filter(txn => {
-        if (txn.requiresSplit) {
-            return txn.splitData !== null;
-        }
-        return txn.chart_of_account_id;
-    }).length;
+    const handleLast30Days = () => {
+        const today = new Date();
+        const last30 = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        setStartDate(last30.toISOString().split('T')[0]);
+        setEndDate(today.toISOString().split('T')[0]);
+        setActivePreset('last30');
+    };
+
+    const handleThisYear = () => {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), 0, 1);
+        setStartDate(firstDay.toISOString().split('T')[0]);
+        setEndDate(today.toISOString().split('T')[0]);
+        setActivePreset('thisYear');
+    };
+
+    const handleClearAll = () => {
+        setStartDate('');
+        setEndDate('');
+        setSelectedAccount('all');
+        setSelectedAccountType('all');
+        setSearchTerm('');
+        setActivePreset(null);
+    };
+
+    // Clear preset when dates are manually changed
+    const handleStartDateChange = (e) => {
+        setStartDate(e.target.value);
+        setActivePreset(null);
+    };
+
+    const handleEndDateChange = (e) => {
+        setEndDate(e.target.value);
+        setActivePreset(null);
+    };
 
     return (
         <div className="space-y-6">
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Transactions</h1>
-                    <p className="text-gray-600 mt-1">
-                        {filteredTransactions.length} transactions
-                        {pendingTransactions.length > 0 && (
-                            <span className="ml-2 text-orange-600 font-medium">
-                                ({pendingTransactions.length} pending)
-                            </span>
-                        )}
+                    <h1 className="text-3xl font-bold text-white">All Transactions</h1>
+                    <p className="text-gray-300 mt-1">
+                        {hasSearched ? `${transactions.length} transactions found` : 'Use filters and click Search to load transactions'}
                     </p>
-                </div>
-                <div className="flex gap-3">
-                    {pendingTransactions.length > 0 && (
-                        <button
-                            onClick={handleBulkSave}
-                            disabled={readyToSaveCount === 0}
-                            className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
-                        >
-                            <Save className="w-5 h-5" />
-                            Save All ({readyToSaveCount})
-                        </button>
-                    )}
-                    <TransactionUpload
-                        accounts={accounts}
-                        onUpload={handleUpload}
-                        loading={loading}
-                    />
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="flex gap-4 items-center bg-white p-4 rounded-lg shadow border">
-                <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Search transactions..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border rounded-lg"
-                    />
+            <div className="bg-white p-4 rounded-lg shadow border space-y-4">
+                {/* Row 1: Search and Account Type */}
+                <div className="flex gap-4 items-center">
+                    <div className="flex-1 relative">
+                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Search transactions..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                        />
+                    </div>
+                    <select
+                        value={selectedAccountType}
+                        onChange={(e) => {
+                            setSelectedAccountType(e.target.value);
+                            setSelectedAccount('all'); // Reset account when type changes
+                        }}
+                        className="border rounded-lg px-3 py-2 min-w-[160px]"
+                    >
+                        <option value="all">All Account Types</option>
+                        {accountTypes.map(type => (
+                            <option key={type} value={type}>
+                                {type}
+                            </option>
+                        ))}
+                    </select>
+                    <select
+                        value={selectedAccount}
+                        onChange={(e) => setSelectedAccount(e.target.value)}
+                        className="border rounded-lg px-3 py-2 min-w-[200px]"
+                    >
+                        <option value="all">All Accounts</option>
+                        {accounts
+                            .filter(acc => selectedAccountType === 'all' || acc.account_type === selectedAccountType)
+                            .map(acc => (
+                                <option key={acc.id} value={acc.id}>
+                                    {acc.name}
+                                </option>
+                            ))}
+                    </select>
                 </div>
-                <select
-                    value={selectedAccount}
-                    onChange={(e) => setSelectedAccount(e.target.value)}
-                    className="border rounded-lg px-3 py-2"
-                >
-                    <option value="all">All Accounts</option>
-                    {accounts.map(acc => (
-                        <option key={acc.id} value={acc.id}>
-                            {acc.name}
-                        </option>
-                    ))}
-                </select>
+
+                {/* Row 2: Date Filters */}
+                <div className="flex gap-4 items-center">
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium text-gray-700">From:</label>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={handleStartDateChange}
+                            className="border rounded-lg px-3 py-2"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium text-gray-700">To:</label>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={handleEndDateChange}
+                            className="border rounded-lg px-3 py-2"
+                        />
+                    </div>
+                    {/* Quick date presets */}
+                    <div className="flex gap-2 ml-4">
+                        <button
+                            onClick={handleThisMonth}
+                            className={`px-3 py-1 text-sm rounded-lg transition-colors ${activePreset === 'thisMonth'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 hover:bg-gray-200'
+                                }`}
+                        >
+                            This Month
+                        </button>
+                        <button
+                            onClick={handleLast30Days}
+                            className={`px-3 py-1 text-sm rounded-lg transition-colors ${activePreset === 'last30'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 hover:bg-gray-200'
+                                }`}
+                        >
+                            Last 30 Days
+                        </button>
+                        <button
+                            onClick={handleThisYear}
+                            className={`px-3 py-1 text-sm rounded-lg transition-colors ${activePreset === 'thisYear'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 hover:bg-gray-200'
+                                }`}
+                        >
+                            This Year
+                        </button>
+                        <button
+                            onClick={handleClearAll}
+                            className="px-3 py-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded-lg"
+                        >
+                            Clear All
+                        </button>
+                        <button
+                            onClick={handleSearch}
+                            disabled={loading}
+                            className="px-6 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:bg-gray-400 flex items-center gap-2"
+                        >
+                            <Search className="w-4 h-4" />
+                            {loading ? 'Searching...' : 'Search'}
+                        </button>
+                    </div>
+                </div>
             </div>
 
             {/* Legend */}
-            <div className="flex gap-4 text-sm">
+            <div className="flex gap-4 text-sm text-gray-300">
                 <div className="flex items-center gap-2">
                     <div className="w-4 h-4 bg-orange-200 border-l-4 border-orange-400"></div>
                     <span>Pending (Not Saved)</span>
@@ -427,32 +557,6 @@ export const Transactions = () => {
                     <span>Split Transaction</span>
                 </div>
             </div>
-
-            {/* Info banner for pending transactions */}
-            {pendingTransactions.length > 0 && (
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h3 className="font-semibold text-orange-900">
-                                {pendingTransactions.length} transactions pending
-                            </h3>
-                            <p className="text-sm text-orange-700 mt-1">
-                                Assign Chart of Accounts or complete splits, then click "Save All" to save to database.
-                                {readyToSaveCount > 0 && (
-                                    <span className="font-medium"> {readyToSaveCount} ready to save.</span>
-                                )}
-                            </p>
-                        </div>
-                        <button
-                            onClick={handleBulkSave}
-                            disabled={readyToSaveCount === 0}
-                            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
-                        >
-                            Save All ({readyToSaveCount})
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {/* Transactions Table */}
             <div className="bg-white rounded-lg shadow border overflow-hidden">
@@ -483,7 +587,7 @@ export const Transactions = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredTransactions.map((txn) => (
+                        {transactions.map((txn) => (
                             <tr key={txn.id || txn.tempId} className={getRowClassName(txn)}>
                                 <td className="px-4 py-3 text-sm">
                                     {txn.date}
@@ -600,9 +704,15 @@ export const Transactions = () => {
                     </tbody>
                 </table>
 
-                {filteredTransactions.length === 0 && (
+                {transactions.length === 0 && hasSearched && (
                     <div className="px-6 py-12 text-center text-gray-500">
                         No transactions found
+                    </div>
+                )}
+
+                {!hasSearched && (
+                    <div className="px-6 py-12 text-center text-gray-500">
+                        Click "Search" to load transactions
                     </div>
                 )}
             </div>

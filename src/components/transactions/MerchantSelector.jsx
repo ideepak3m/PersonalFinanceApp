@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Check, X } from 'lucide-react';
-import { supabaseMerchantDB } from '../../services/pocketbaseDatabase';
+import { merchantDB } from '../../services/database';
 import './MerchantSelector.css';
 
 export const MerchantSelector = ({ transaction, merchants, onMerchantSelected, onCreateNew }) => {

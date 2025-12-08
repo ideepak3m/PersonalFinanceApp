@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-    supabaseMerchantDB,
-    supabaseSubscriptionHistoryDB
-} from '../services/pocketbaseDatabase';
+    merchantDB,
+    subscriptionHistoryDB
+} from '../services/database';
 import './SubscriptionManager.css';
 
 const SubscriptionManager = () => {
@@ -28,7 +28,7 @@ const SubscriptionManager = () => {
         try {
             setLoading(true);
 
-            const allMerchants = await supabaseMerchantDB.getAll();
+            const allMerchants = await merchantDB.getAll();
             // Filter subscriptions and sort by name
             const data = (allMerchants || [])
                 .filter(m => m.is_subscription)
@@ -121,10 +121,10 @@ const SubscriptionManager = () => {
                 merchantUpdate.subscription_reactivated_at = now;
             }
 
-            await supabaseMerchantDB.update(selectedSubscription.id, merchantUpdate);
+            await merchantDB.update(selectedSubscription.id, merchantUpdate);
 
             // Insert into subscription_history
-            await supabaseSubscriptionHistoryDB.add({
+            await subscriptionHistoryDB.add({
                 merchant_id: selectedSubscription.id,
                 user_id: user.id,
                 action: actionType === 'activate' ? 'activated' : 'deactivated',
@@ -145,7 +145,7 @@ const SubscriptionManager = () => {
 
     const loadHistory = async (merchantId) => {
         try {
-            const allHistory = await supabaseSubscriptionHistoryDB.getAll();
+            const allHistory = await subscriptionHistoryDB.getAll();
             // Filter by merchant_id and sort by date descending
             const data = (allHistory || [])
                 .filter(h => h.merchant_id === merchantId)

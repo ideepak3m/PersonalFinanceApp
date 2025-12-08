@@ -3,7 +3,7 @@ import { ChatMessage } from '../components/ai/ChatMessage';
 import { ChatInput } from '../components/ai/ChatInput';
 import { getAIResponse } from '../services/aiService';
 import { Sparkles } from 'lucide-react';
-import { supabaseAccountsDB, supabaseTransactionsDB } from '../services/pocketbaseDatabase';
+import { accountsDB, transactionsDB } from '../services/database';
 
 export const AIAdvisor = () => {
     const [accounts, setAccounts] = useState([]);
@@ -21,9 +21,9 @@ export const AIAdvisor = () => {
     useEffect(() => {
         const fetchData = async () => {
             setDataLoading(true);
-            const accs = await supabaseAccountsDB.getAll();
+            const accs = await accountsDB.getAll();
             setAccounts(accs);
-            const txns = await supabaseTransactionsDB.getAll();
+            const txns = await transactionsDB.getAll();
             setTransactions(txns);
             setDataLoading(false);
         };
