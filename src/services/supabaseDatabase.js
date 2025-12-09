@@ -1561,6 +1561,12 @@ export const supabaseInvestmentManagersDB = new SupabaseService('investment_mana
 export const supabaseInvestmentTransactionsDB = new InvestmentTransactionsService();
 export const supabaseCashTransactionsDB = new CashTransactionsService();
 
+// Property & Mortgage services
+export const supabasePropertiesDB = new SupabaseService('properties');
+export const supabaseMortgagesDB = new SupabaseService('mortgages');
+export const supabaseMortgageTermsDB = new SupabaseService('mortgage_terms');
+export const supabaseMortgagePaymentsDB = new SupabaseService('mortgage_payments');
+
 // NEW: Phase 2 services for retirement planning
 export const supabaseUserProfileDB = new UserProfileService();
 export const supabaseGovernmentBenefitsDB = new GovernmentBenefitsService();

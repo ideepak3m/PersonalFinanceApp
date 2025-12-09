@@ -16,6 +16,8 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import { AccountsDashboard } from './pages/AccountsDashboard';
 import { InvestmentAccountsDashboard } from './pages/InvestmentAccountsDashboard';
+import { Properties } from './pages/Properties';
+import { PropertyDetails } from './pages/PropertyDetails';
 import { UncategorizedReceipts } from './components/transactions/UncategorizedReceipts';
 import { ImportMapper } from './pages/ImportMapper';
 import SubscriptionManager from './components/SubscriptionManager';
@@ -65,6 +67,8 @@ function App() {
 
                           {/* Investments - Shows accounts table with import/performance */}
                           <Route path="investments" element={<InvestmentAccountsDashboard />} />
+                          <Route path="properties" element={<Properties />} />
+                          <Route path="properties/:propertyId" element={<PropertyDetails />} />
                           <Route path="pdf-reader" element={<PDFTableReader />} />
 
                           {/* Reports */}

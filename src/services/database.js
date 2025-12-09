@@ -36,6 +36,12 @@ export const investmentManagersDB = dbModule.supabaseInvestmentManagersDB;
 export const investmentTransactionsDB = dbModule.supabaseInvestmentTransactionsDB;
 export const cashTransactionsDB = dbModule.supabaseCashTransactionsDB;
 
+// ============ Property & Mortgage Services ============
+export const propertiesDB = dbModule.supabasePropertiesDB;
+export const mortgagesDB = dbModule.supabaseMortgagesDB;
+export const mortgageTermsDB = dbModule.supabaseMortgageTermsDB;
+export const mortgagePaymentsDB = dbModule.supabaseMortgagePaymentsDB;
+
 // ============ Import/Staging Services ============
 export const importStagingDB = dbModule.supabaseImportStagingDB;
 export const importRawDataDB = dbModule.supabaseImportRawDataDB;

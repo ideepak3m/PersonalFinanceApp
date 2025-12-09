@@ -71,9 +71,10 @@ export const Sidebar = () => {
             key: 'investments',
             label: 'Investments',
             icon: TrendingUp,
-            basePaths: ['/investments', '/pdf-reader'],
+            basePaths: ['/investments', '/pdf-reader', '/properties'],
             children: [
                 { path: '/investments', label: 'Investment Accounts', icon: Wallet },
+                { path: '/properties', label: 'Properties', icon: Building2 },
                 { path: '/pdf-reader', label: 'Import Statement', icon: Upload },
             ]
         },

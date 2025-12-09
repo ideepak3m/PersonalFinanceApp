@@ -628,6 +628,66 @@ CREATE TABLE personal_finance.idx_merchant_user_id (
   user_id uuid
 );                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_mortgage_payments_date */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_mortgage_payments_date (
+  payment_date date
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_mortgage_payments_mortgage_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_mortgage_payments_mortgage_id (
+  mortgage_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_mortgage_payments_term_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_mortgage_payments_term_id (
+  term_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_mortgage_payments_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_mortgage_payments_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_mortgage_terms_current */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_mortgage_terms_current (
+  is_current_term boolean
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_mortgage_terms_mortgage_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_mortgage_terms_mortgage_id (
+  mortgage_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_mortgage_terms_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_mortgage_terms_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_mortgages_is_active */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_mortgages_is_active (
+  is_active boolean
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_mortgages_property_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_mortgages_property_id (
+  property_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_mortgages_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_mortgages_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| /* ------------------------------------------------------------ */
 /* TABLE: personal_finance.idx_product_metadata_product_id */
 /* ------------------------------------------------------------ */
 CREATE TABLE personal_finance.idx_product_metadata_product_id (
@@ -645,6 +705,18 @@ CREATE TABLE personal_finance.idx_products_account_id (
 CREATE TABLE personal_finance.idx_products_user_id (
   user_id uuid
 );                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_properties_type */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_properties_type (
+  property_type text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.idx_properties_user_id */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.idx_properties_user_id (
+  user_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | /* ------------------------------------------------------------ */
 /* TABLE: personal_finance.idx_providers_country */
 /* ------------------------------------------------------------ */
@@ -982,6 +1054,95 @@ CREATE TABLE personal_finance.monthly_cash_flow (
   expense_count bigint
 );                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.mortgage_payments */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.mortgage_payments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  mortgage_id uuid,
+  payment_date date NOT NULL,
+  payment_amount numeric NOT NULL,
+  principal_amount numeric NOT NULL,
+  interest_amount numeric NOT NULL,
+  extra_principal numeric DEFAULT 0,
+  payment_type text DEFAULT 'regular'::text,
+  balance_after_payment numeric,
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  term_id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.mortgage_payments_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.mortgage_payments_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.mortgage_terms */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.mortgage_terms (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  mortgage_id uuid,
+  term_number integer NOT NULL,
+  lender text NOT NULL,
+  interest_rate numeric NOT NULL,
+  rate_type text NOT NULL,
+  prime_rate_offset numeric,
+  term_years integer NOT NULL,
+  term_start_date date NOT NULL,
+  term_end_date date,
+  payment_frequency text NOT NULL,
+  regular_payment_amount numeric NOT NULL,
+  minimum_payment_type text,
+  balance_at_term_start numeric,
+  balance_at_term_end numeric,
+  is_current_term boolean DEFAULT false,
+  renewal_type text,
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.mortgage_terms_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.mortgage_terms_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.mortgages */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.mortgages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  property_id uuid,
+  mortgage_name text NOT NULL,
+  lender text NOT NULL,
+  mortgage_type text NOT NULL,
+  original_loan_amount numeric NOT NULL,
+  loan_date date NOT NULL,
+  interest_rate numeric NOT NULL,
+  amortization_years integer NOT NULL,
+  term_years integer,
+  term_end_date date,
+  payment_frequency text NOT NULL,
+  regular_payment_amount numeric NOT NULL,
+  payment_start_date date NOT NULL,
+  current_balance numeric,
+  is_active boolean DEFAULT true,
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  original_loan_date date,
+  original_amortization_years integer
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.mortgages_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.mortgages_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| /* ------------------------------------------------------------ */
 /* TABLE: personal_finance.portfolio_by_account_type */
 /* ------------------------------------------------------------ */
 CREATE TABLE personal_finance.portfolio_by_account_type (
@@ -1111,6 +1272,36 @@ CREATE TABLE personal_finance.profiles_email_key (
 CREATE TABLE personal_finance.profiles_pkey (
   id uuid
 );                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.properties */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.properties (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  property_name text NOT NULL,
+  property_type text NOT NULL,
+  address text,
+  purchase_date date NOT NULL,
+  purchase_price numeric NOT NULL,
+  down_payment numeric NOT NULL,
+  land_transfer_tax numeric DEFAULT 0,
+  legal_fees numeric DEFAULT 0,
+  home_inspection numeric DEFAULT 0,
+  appraisal_fee numeric DEFAULT 0,
+  other_closing_costs numeric DEFAULT 0,
+  current_market_value numeric,
+  property_tax_annual numeric,
+  is_primary_residence boolean DEFAULT true,
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.properties_pkey */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.properties_pkey (
+  id uuid
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | /* ------------------------------------------------------------ */
 /* TABLE: personal_finance.providers */
 /* ------------------------------------------------------------ */
@@ -1362,3 +1553,104 @@ CREATE TABLE personal_finance.user_profile_pkey (
 CREATE TABLE personal_finance.user_profile_user_id_key (
   user_id uuid
 );                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.v_mortgage_history */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.v_mortgage_history (
+  mortgage_id uuid,
+  user_id uuid,
+  mortgage_name text,
+  mortgage_type text,
+  original_loan_amount numeric,
+  property_name text,
+  term_number integer,
+  lender text,
+  interest_rate numeric,
+  rate_type text,
+  term_years integer,
+  term_start_date date,
+  term_end_date date,
+  renewal_type text,
+  balance_at_term_start numeric,
+  balance_at_term_end numeric,
+  is_current_term boolean
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.v_mortgage_summary */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.v_mortgage_summary (
+  id uuid,
+  user_id uuid,
+  mortgage_name text,
+  lender text,
+  mortgage_type text,
+  original_loan_amount numeric,
+  current_balance numeric,
+  interest_rate numeric,
+  payment_frequency text,
+  regular_payment_amount numeric,
+  property_name text,
+  total_principal_paid numeric,
+  total_interest_paid numeric,
+  payments_made bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.v_mortgage_term_summary */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.v_mortgage_term_summary (
+  term_id uuid,
+  user_id uuid,
+  mortgage_id uuid,
+  term_number integer,
+  lender text,
+  interest_rate numeric,
+  rate_type text,
+  term_start_date date,
+  term_end_date date,
+  renewal_type text,
+  mortgage_name text,
+  total_principal_paid numeric,
+  total_interest_paid numeric,
+  payments_made bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.v_mortgage_with_current_term */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.v_mortgage_with_current_term (
+  id uuid,
+  user_id uuid,
+  mortgage_name text,
+  mortgage_type text,
+  original_loan_amount numeric,
+  original_loan_date date,
+  original_amortization_years integer,
+  current_balance numeric,
+  is_active boolean,
+  property_name text,
+  address text,
+  term_number integer,
+  current_lender text,
+  current_rate numeric,
+  current_rate_type text,
+  term_start_date date,
+  term_end_date date,
+  payment_frequency text,
+  regular_payment_amount numeric,
+  minimum_payment_type text
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| /* ------------------------------------------------------------ */
+/* TABLE: personal_finance.v_property_summary */
+/* ------------------------------------------------------------ */
+CREATE TABLE personal_finance.v_property_summary (
+  id uuid,
+  user_id uuid,
+  property_name text,
+  property_type text,
+  address text,
+  purchase_date date,
+  purchase_price numeric,
+  current_market_value numeric,
+  estimated_equity numeric,
+  total_closing_costs numeric,
+  active_mortgages_count bigint
+);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
