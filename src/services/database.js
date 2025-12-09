@@ -19,6 +19,7 @@ if (DB_MODE === 'supabase') {
 }
 
 // ============ Core Database Services (Clean Names) ============
+// Both pocketbaseDatabase and supabaseDatabase export supabase* aliases for compatibility
 export const accountsDB = dbModule.supabaseAccountsDB;
 export const transactionsDB = dbModule.supabaseTransactionsDB;
 export const chartOfAccountsDB = dbModule.supabaseChartOfAccountsDB;

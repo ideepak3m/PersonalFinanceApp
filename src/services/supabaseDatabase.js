@@ -109,6 +109,14 @@ class SupabaseService {
     }
 
     /**
+     * Whether this table has a user_id column for filtering
+     * Override in subclasses for tables without user_id
+     */
+    hasUserIdColumn() {
+        return true;
+    }
+
+    /**
      * Get all records for current user
      */
     async getAll() {
@@ -116,10 +124,14 @@ class SupabaseService {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Not authenticated');
 
-            const { data, error } = await this.table()
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
+            let query = this.table().select('*');
+
+            // Only filter by user_id if the table has the column
+            if (this.hasUserIdColumn()) {
+                query = query.eq('user_id', user.id);
+            }
+
+            const { data, error } = await query;
 
             if (error) throw error;
             return data || [];
@@ -346,11 +358,10 @@ class TransactionService extends SupabaseService {
                     account:account_id (
                         id,
                         name,
-                        account_type
+                        type
                     ),
                     merchant:normalized_merchant_id (
                         id,
-                        name,
                         normalized_name
                     ),
                     chart_of_account:chart_of_account_id (
@@ -409,8 +420,10 @@ class TransactionService extends SupabaseService {
         }
     }
 }
+
+/**
  * Transaction Split specific service
-    */
+ */
 class TransactionSplitService extends SupabaseService {
     constructor() {
         super('transaction_split', 'personal_finance');
@@ -1424,6 +1437,106 @@ class HoldingSnapshotsService extends SupabaseService {
     }
 }
 
+/**
+ * Investment Transactions Service - No user_id column
+ * Transactions are linked via account_id to investment_accounts which have user_id
+ */
+class InvestmentTransactionsService extends SupabaseService {
+    constructor() {
+        super('investment_transactions', 'personal_finance');
+    }
+
+    hasUserIdColumn() {
+        return false; // This table doesn't have user_id
+    }
+
+    /**
+     * Get all investment transactions for current user via account ownership
+     */
+    async getAll() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            // First get user's investment account IDs
+            const { data: accounts, error: accError } = await supabase
+                .from('investment_accounts')
+                .select('id')
+                .eq('user_id', user.id);
+
+            if (accError) throw accError;
+
+            if (!accounts || accounts.length === 0) {
+                return [];
+            }
+
+            const accountIds = accounts.map(a => a.id);
+
+            // Get transactions for those accounts
+            const { data, error } = await this.table()
+                .select('*')
+                .in('account_id', accountIds)
+                .order('transaction_date', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching investment transactions:', error);
+            throw error;
+        }
+    }
+}
+
+/**
+ * Cash Transactions Service - No user_id column
+ * Transactions are linked via account_id to investment_accounts which have user_id
+ */
+class CashTransactionsService extends SupabaseService {
+    constructor() {
+        super('cash_transactions', 'personal_finance');
+    }
+
+    hasUserIdColumn() {
+        return false; // This table doesn't have user_id
+    }
+
+    /**
+     * Get all cash transactions for current user via account ownership
+     */
+    async getAll() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            // First get user's investment account IDs
+            const { data: accounts, error: accError } = await supabase
+                .from('investment_accounts')
+                .select('id')
+                .eq('user_id', user.id);
+
+            if (accError) throw accError;
+
+            if (!accounts || accounts.length === 0) {
+                return [];
+            }
+
+            const accountIds = accounts.map(a => a.id);
+
+            // Get cash transactions for those accounts
+            const { data, error } = await this.table()
+                .select('*')
+                .in('account_id', accountIds)
+                .order('transaction_date', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching cash transactions:', error);
+            throw error;
+        }
+    }
+}
+
 // Export service instances
 export const supabaseAccountsDB = new SupabaseService('accounts');
 export const supabaseTransactionsDB = new TransactionService();
@@ -1441,6 +1554,13 @@ export const supabaseUserPreferencesDB = new UserPreferencesService();
 export const supabaseProductMetadataDB = new ProductMetadataService();
 export const supabaseProfilesDB = new SupabaseService('profiles');
 
+// Investment services
+export const supabaseHoldingsDB = new SupabaseService('holdings');
+export const supabaseInvestmentAccountsDB = new SupabaseService('investment_accounts');
+export const supabaseInvestmentManagersDB = new SupabaseService('investment_managers');
+export const supabaseInvestmentTransactionsDB = new InvestmentTransactionsService();
+export const supabaseCashTransactionsDB = new CashTransactionsService();
+
 // NEW: Phase 2 services for retirement planning
 export const supabaseUserProfileDB = new UserProfileService();
 export const supabaseGovernmentBenefitsDB = new GovernmentBenefitsService();
@@ -1453,9 +1573,14 @@ export const supabaseColumnMappingsDB = new ColumnMappingsService();
 export const supabaseSubscriptionHistoryDB = new SubscriptionHistoryService();
 export const supabaseMerchantSplitRulesDB = new MerchantSplitRulesService();
 
+// AI/Misc services
+export const supabaseAIExtractionLogsDB = new SupabaseService('ai_extraction_logs');
+
 // Legacy/alias exports for backwards compatibility
 export const supabaseKnowledgeDB = supabaseBeliefTagsDB;
 export const supabaseSettingsDB = supabaseUserPreferencesDB; // If settings maps to user_preferences
 
 // If you have a separate settings table, uncomment this:
 // export const supabaseSettingsDB = new SupabaseService('settings');
+
+// Note: getDefaultUserId is already exported at the top of this file

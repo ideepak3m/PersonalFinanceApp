@@ -250,7 +250,7 @@ export const MerchantSplitRules = () => {
                                         {formatSplitDisplay(rule.splits)}
                                     </td>
                                     <td className="date-cell">
-                                        {(rule.created || rule.created_at) 
+                                        {(rule.created || rule.created_at)
                                             ? new Date(rule.created || rule.created_at).toLocaleDateString()
                                             : '-'}
                                     </td>
