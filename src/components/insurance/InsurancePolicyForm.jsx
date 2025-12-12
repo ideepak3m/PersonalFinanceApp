@@ -8,7 +8,10 @@ import {
     PAYMENT_MODES,
     RELATIONSHIPS,
     RIDER_TYPES,
-    COMMON_INSURERS
+    COMMON_INSURERS,
+    ANNUITY_TYPES,
+    ANNUITY_MODES,
+    isAnnuityPlan
 } from '../../services/insuranceService';
 
 const InsurancePolicyForm = ({ policy, onClose }) => {
@@ -44,6 +47,14 @@ const InsurancePolicyForm = ({ policy, onClose }) => {
         current_fund_value: '',
         expected_maturity_value: '',
         surrender_value: '',
+
+        // Annuity-specific fields
+        purchase_price: '',
+        annuity_amount: '',
+        annuity_mode: 'monthly',
+        annuity_type: 'immediate',
+        annuity_start_date: '',
+        deferment_period: '',
 
         // Payment Details
         premium_payment_mode: 'online',
@@ -85,6 +96,14 @@ const InsurancePolicyForm = ({ policy, onClose }) => {
                 current_fund_value: policy.current_fund_value || '',
                 expected_maturity_value: policy.expected_maturity_value || '',
                 surrender_value: policy.surrender_value || '',
+                // Annuity fields
+                purchase_price: policy.purchase_price || '',
+                annuity_amount: policy.annuity_amount || '',
+                annuity_mode: policy.annuity_mode || 'monthly',
+                annuity_type: policy.annuity_type || 'immediate',
+                annuity_start_date: policy.annuity_start_date || '',
+                deferment_period: policy.deferment_period || '',
+                // Payment details
                 premium_payment_mode: policy.premium_payment_mode || 'online',
                 next_premium_due_date: policy.next_premium_due_date || '',
                 last_premium_paid_date: policy.last_premium_paid_date || '',
@@ -113,17 +132,33 @@ const InsurancePolicyForm = ({ policy, onClose }) => {
 
     const validate = () => {
         const newErrors = {};
+        const isAnnuity = isAnnuityPlan(formData.plan_type);
 
         if (!formData.insurer_name) newErrors.insurer_name = 'Insurer name is required';
         if (!formData.policy_number) newErrors.policy_number = 'Policy number is required';
         if (!formData.plan_type) newErrors.plan_type = 'Plan type is required';
         if (!formData.policy_holder_name) newErrors.policy_holder_name = 'Policy holder name is required';
-        if (!formData.sum_assured || parseFloat(formData.sum_assured) <= 0) {
+        
+        // Sum assured validation - not required for annuity plans
+        if (!isAnnuity && (!formData.sum_assured || parseFloat(formData.sum_assured) < 0)) {
             newErrors.sum_assured = 'Valid sum assured is required';
         }
-        if (!formData.premium_amount || parseFloat(formData.premium_amount) <= 0) {
-            newErrors.premium_amount = 'Valid premium amount is required';
+        
+        // For annuity plans, require purchase price and annuity amount
+        if (isAnnuity) {
+            if (!formData.purchase_price || parseFloat(formData.purchase_price) <= 0) {
+                newErrors.purchase_price = 'Purchase price is required for annuity plans';
+            }
+            if (!formData.annuity_amount || parseFloat(formData.annuity_amount) <= 0) {
+                newErrors.annuity_amount = 'Annuity/Pension amount is required';
+            }
+        } else {
+            // For non-annuity plans, premium amount is required
+            if (!formData.premium_amount || parseFloat(formData.premium_amount) <= 0) {
+                newErrors.premium_amount = 'Valid premium amount is required';
+            }
         }
+        
         if (!formData.policy_start_date) newErrors.policy_start_date = 'Policy start date is required';
 
         // Validate nominees total percentage
@@ -145,6 +180,8 @@ const InsurancePolicyForm = ({ policy, onClose }) => {
             // Switch to tab with first error
             if (errors.nominees) {
                 setActiveTab('nominees');
+            } else if (errors.purchase_price || errors.annuity_amount) {
+                setActiveTab('financial');
             } else {
                 setActiveTab('basic');
             }
@@ -166,6 +203,14 @@ const InsurancePolicyForm = ({ policy, onClose }) => {
                 current_fund_value: formData.current_fund_value ? parseFloat(formData.current_fund_value) : null,
                 expected_maturity_value: formData.expected_maturity_value ? parseFloat(formData.expected_maturity_value) : null,
                 surrender_value: formData.surrender_value ? parseFloat(formData.surrender_value) : null,
+                // Annuity fields
+                purchase_price: formData.purchase_price ? parseFloat(formData.purchase_price) : null,
+                annuity_amount: formData.annuity_amount ? parseFloat(formData.annuity_amount) : null,
+                annuity_mode: formData.annuity_mode || null,
+                annuity_type: formData.annuity_type || null,
+                annuity_start_date: formData.annuity_start_date || null,
+                deferment_period: formData.deferment_period ? parseInt(formData.deferment_period) : null,
+                // Dates
                 maturity_date: formData.maturity_date || null,
                 next_premium_due_date: formData.next_premium_due_date || null,
                 last_premium_paid_date: formData.last_premium_paid_date || null,
@@ -269,8 +314,8 @@ const InsurancePolicyForm = ({ policy, onClose }) => {
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
-                                    ? 'border-blue-600 text-blue-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                         >
                             {tab.label}
@@ -475,199 +520,337 @@ const InsurancePolicyForm = ({ policy, onClose }) => {
                 {/* Financial Tab */}
                 {activeTab === 'financial' && (
                     <div className="space-y-6">
-                        {/* Premium Details */}
-                        <div>
-                            <h3 className="font-medium text-gray-900 mb-4">Premium Details</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Annuity-Specific Section */}
+                        {isAnnuityPlan(formData.plan_type) ? (
+                            <>
+                                {/* Annuity Details */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Sum Assured *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        name="sum_assured"
-                                        value={formData.sum_assured}
-                                        onChange={handleChange}
-                                        className={`w-full border rounded-lg px-3 py-2 ${errors.sum_assured ? 'border-red-500' : ''}`}
-                                        min="0"
-                                        step="1000"
-                                    />
-                                    {errors.sum_assured && (
-                                        <p className="text-red-500 text-xs mt-1">{errors.sum_assured}</p>
-                                    )}
+                                    <h3 className="font-medium text-gray-900 mb-4">Annuity Details</h3>
+                                    <p className="text-sm text-gray-500 mb-4">
+                                        For annuity plans like Jeevan Shanti, enter the purchase price and pension details.
+                                    </p>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Purchase Price *
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="purchase_price"
+                                                value={formData.purchase_price}
+                                                onChange={handleChange}
+                                                className={`w-full border rounded-lg px-3 py-2 ${errors.purchase_price ? 'border-red-500' : ''}`}
+                                                min="0"
+                                                step="1000"
+                                                placeholder="Lump sum paid"
+                                            />
+                                            {errors.purchase_price && (
+                                                <p className="text-red-500 text-xs mt-1">{errors.purchase_price}</p>
+                                            )}
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Annuity/Pension Amount *
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="annuity_amount"
+                                                value={formData.annuity_amount}
+                                                onChange={handleChange}
+                                                className={`w-full border rounded-lg px-3 py-2 ${errors.annuity_amount ? 'border-red-500' : ''}`}
+                                                min="0"
+                                                step="100"
+                                                placeholder="Pension received per period"
+                                            />
+                                            {errors.annuity_amount && (
+                                                <p className="text-red-500 text-xs mt-1">{errors.annuity_amount}</p>
+                                            )}
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Annuity Mode
+                                            </label>
+                                            <select
+                                                name="annuity_mode"
+                                                value={formData.annuity_mode}
+                                                onChange={handleChange}
+                                                className="w-full border rounded-lg px-3 py-2"
+                                            >
+                                                {ANNUITY_MODES.map(m => (
+                                                    <option key={m.value} value={m.value}>{m.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Annuity Type
+                                            </label>
+                                            <select
+                                                name="annuity_type"
+                                                value={formData.annuity_type}
+                                                onChange={handleChange}
+                                                className="w-full border rounded-lg px-3 py-2"
+                                            >
+                                                {ANNUITY_TYPES.map(t => (
+                                                    <option key={t.value} value={t.value}>{t.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Annuity Start Date
+                                            </label>
+                                            <input
+                                                type="date"
+                                                name="annuity_start_date"
+                                                value={formData.annuity_start_date}
+                                                onChange={handleChange}
+                                                className="w-full border rounded-lg px-3 py-2"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">When pension payments begin</p>
+                                        </div>
+
+                                        {formData.annuity_type === 'deferred' && (
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Deferment Period (Years)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    name="deferment_period"
+                                                    value={formData.deferment_period}
+                                                    onChange={handleChange}
+                                                    className="w-full border rounded-lg px-3 py-2"
+                                                    min="0"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Premium Amount *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        name="premium_amount"
-                                        value={formData.premium_amount}
-                                        onChange={handleChange}
-                                        className={`w-full border rounded-lg px-3 py-2 ${errors.premium_amount ? 'border-red-500' : ''}`}
-                                        min="0"
-                                        step="100"
-                                    />
-                                    {errors.premium_amount && (
-                                        <p className="text-red-500 text-xs mt-1">{errors.premium_amount}</p>
-                                    )}
+                                {/* Optional: Sum Assured for annuity with return of purchase price */}
+                                <div className="border-t pt-6">
+                                    <h3 className="font-medium text-gray-900 mb-4">Death Benefit (if applicable)</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Sum Assured / Return Amount
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="sum_assured"
+                                                value={formData.sum_assured}
+                                                onChange={handleChange}
+                                                className="w-full border rounded-lg px-3 py-2"
+                                                min="0"
+                                                step="1000"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">Death benefit or return of purchase price (0 if not applicable)</p>
+                                        </div>
+                                    </div>
                                 </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Premium Frequency
-                                    </label>
-                                    <select
-                                        name="premium_frequency"
-                                        value={formData.premium_frequency}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-3 py-2"
-                                    >
-                                        {PREMIUM_FREQUENCIES.map(f => (
-                                            <option key={f.value} value={f.value}>{f.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Payment Mode
-                                    </label>
-                                    <select
-                                        name="premium_payment_mode"
-                                        value={formData.premium_payment_mode}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-3 py-2"
-                                    >
-                                        {PAYMENT_MODES.map(m => (
-                                            <option key={m.value} value={m.value}>{m.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Next Premium Due Date
-                                    </label>
-                                    <input
-                                        type="date"
-                                        name="next_premium_due_date"
-                                        value={formData.next_premium_due_date}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-3 py-2"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Last Premium Paid Date
-                                    </label>
-                                    <input
-                                        type="date"
-                                        name="last_premium_paid_date"
-                                        value={formData.last_premium_paid_date}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-3 py-2"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Financial Tracking */}
-                        <div className="border-t pt-6">
-                            <h3 className="font-medium text-gray-900 mb-4">Financial Tracking</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Total Premiums Paid
-                                    </label>
-                                    <input
-                                        type="number"
-                                        name="total_premiums_paid"
-                                        value={formData.total_premiums_paid}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-3 py-2"
-                                        min="0"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Accrued Bonus
-                                    </label>
-                                    <input
-                                        type="number"
-                                        name="accrued_bonus"
-                                        value={formData.accrued_bonus}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-3 py-2"
-                                        min="0"
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">Simple/Reversionary bonus</p>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Terminal Bonus
-                                    </label>
-                                    <input
-                                        type="number"
-                                        name="terminal_bonus"
-                                        value={formData.terminal_bonus}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-3 py-2"
-                                        min="0"
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">Estimated/Actual</p>
-                                </div>
-
-                                {formData.plan_type === 'ulip' && (
+                            </>
+                        ) : (
+                            /* Regular Policy Premium Details */
+                            <div>
+                                <h3 className="font-medium text-gray-900 mb-4">Premium Details</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Current Fund Value
+                                            Sum Assured *
                                         </label>
                                         <input
                                             type="number"
-                                            name="current_fund_value"
-                                            value={formData.current_fund_value}
+                                            name="sum_assured"
+                                            value={formData.sum_assured}
+                                            onChange={handleChange}
+                                            className={`w-full border rounded-lg px-3 py-2 ${errors.sum_assured ? 'border-red-500' : ''}`}
+                                            min="0"
+                                            step="1000"
+                                        />
+                                        {errors.sum_assured && (
+                                            <p className="text-red-500 text-xs mt-1">{errors.sum_assured}</p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Premium Amount *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="premium_amount"
+                                            value={formData.premium_amount}
+                                            onChange={handleChange}
+                                            className={`w-full border rounded-lg px-3 py-2 ${errors.premium_amount ? 'border-red-500' : ''}`}
+                                            min="0"
+                                            step="100"
+                                        />
+                                        {errors.premium_amount && (
+                                            <p className="text-red-500 text-xs mt-1">{errors.premium_amount}</p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Premium Frequency
+                                        </label>
+                                        <select
+                                            name="premium_frequency"
+                                            value={formData.premium_frequency}
+                                            onChange={handleChange}
+                                            className="w-full border rounded-lg px-3 py-2"
+                                        >
+                                            {PREMIUM_FREQUENCIES.map(f => (
+                                                <option key={f.value} value={f.value}>{f.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Payment Mode
+                                        </label>
+                                        <select
+                                            name="premium_payment_mode"
+                                            value={formData.premium_payment_mode}
+                                            onChange={handleChange}
+                                            className="w-full border rounded-lg px-3 py-2"
+                                        >
+                                            {PAYMENT_MODES.map(m => (
+                                                <option key={m.value} value={m.value}>{m.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Next Premium Due Date
+                                        </label>
+                                        <input
+                                            type="date"
+                                            name="next_premium_due_date"
+                                            value={formData.next_premium_due_date}
+                                            onChange={handleChange}
+                                            className="w-full border rounded-lg px-3 py-2"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Last Premium Paid Date
+                                        </label>
+                                        <input
+                                            type="date"
+                                            name="last_premium_paid_date"
+                                            value={formData.last_premium_paid_date}
+                                            onChange={handleChange}
+                                            className="w-full border rounded-lg px-3 py-2"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Financial Tracking - Show for non-annuity plans */}
+                        {!isAnnuityPlan(formData.plan_type) && (
+                            <div className="border-t pt-6">
+                                <h3 className="font-medium text-gray-900 mb-4">Financial Tracking</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Total Premiums Paid
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="total_premiums_paid"
+                                            value={formData.total_premiums_paid}
                                             onChange={handleChange}
                                             className="w-full border rounded-lg px-3 py-2"
                                             min="0"
                                         />
                                     </div>
-                                )}
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Expected Maturity Value
-                                    </label>
-                                    <input
-                                        type="number"
-                                        name="expected_maturity_value"
-                                        value={formData.expected_maturity_value}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-3 py-2"
-                                        min="0"
-                                    />
-                                </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Accrued Bonus
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="accrued_bonus"
+                                            value={formData.accrued_bonus}
+                                            onChange={handleChange}
+                                            className="w-full border rounded-lg px-3 py-2"
+                                            min="0"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">Simple/Reversionary bonus</p>
+                                    </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Surrender Value
-                                    </label>
-                                    <input
-                                        type="number"
-                                        name="surrender_value"
-                                        value={formData.surrender_value}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-3 py-2"
-                                        min="0"
-                                    />
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Terminal Bonus
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="terminal_bonus"
+                                            value={formData.terminal_bonus}
+                                            onChange={handleChange}
+                                            className="w-full border rounded-lg px-3 py-2"
+                                            min="0"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">Estimated/Actual</p>
+                                    </div>
+
+                                    {formData.plan_type === 'ulip' && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Current Fund Value
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="current_fund_value"
+                                                value={formData.current_fund_value}
+                                                onChange={handleChange}
+                                                className="w-full border rounded-lg px-3 py-2"
+                                                min="0"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Expected Maturity Value
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="expected_maturity_value"
+                                            value={formData.expected_maturity_value}
+                                            onChange={handleChange}
+                                            className="w-full border rounded-lg px-3 py-2"
+                                            min="0"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Surrender Value
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="surrender_value"
+                                            value={formData.surrender_value}
+                                            onChange={handleChange}
+                                            className="w-full border rounded-lg px-3 py-2"
+                                            min="0"
+                                        />
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 )}
 

@@ -549,6 +549,34 @@ export const RELATIONSHIPS = [
     { value: 'other', label: 'Other' }
 ];
 
+export const ANNUITY_TYPES = [
+    { value: 'immediate', label: 'Immediate Annuity' },
+    { value: 'deferred', label: 'Deferred Annuity' },
+    { value: 'single_life', label: 'Single Life' },
+    { value: 'joint_life', label: 'Joint Life' },
+    { value: 'joint_life_last_survivor', label: 'Joint Life - Last Survivor' },
+    { value: 'with_rop', label: 'With Return of Purchase Price' },
+    { value: 'without_rop', label: 'Without Return of Purchase Price' }
+];
+
+export const ANNUITY_MODES = [
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: 'Quarterly' },
+    { value: 'half_yearly', label: 'Half-Yearly' },
+    { value: 'yearly', label: 'Yearly' }
+];
+
+// Helper to check if plan type is annuity
+export const isAnnuityPlan = (planType) => {
+    return planType === 'annuity';
+};
+
+// Helper to check if sum assured is required for this plan type
+export const isSumAssuredRequired = (planType) => {
+    // Annuity plans don't have sum assured, they have purchase price
+    return planType !== 'annuity';
+};
+
 export const RIDER_TYPES = [
     { value: 'accidental_death', label: 'Accidental Death Benefit' },
     { value: 'critical_illness', label: 'Critical Illness' },

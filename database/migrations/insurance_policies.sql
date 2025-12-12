@@ -37,6 +37,14 @@ CREATE TABLE IF NOT EXISTS personal_finance.insurance_policies (
     expected_maturity_value DECIMAL(15,2),
     surrender_value DECIMAL(15,2),
     
+    -- Annuity-specific fields (for Jeevan Shanti, etc.)
+    purchase_price DECIMAL(15,2),                       -- Lump sum paid for annuity
+    annuity_amount DECIMAL(12,2),                       -- Pension amount received per period
+    annuity_mode TEXT,                                  -- monthly, quarterly, half_yearly, yearly
+    annuity_type TEXT,                                  -- immediate, deferred, single_life, joint_life
+    annuity_start_date DATE,                            -- When pension payments begin
+    deferment_period INTEGER,                           -- Years of deferment (for deferred annuity)
+    
     -- Payment Details
     premium_payment_mode TEXT,                          -- cash, online, auto_debit, cheque, ecs
     next_premium_due_date DATE,
@@ -243,6 +251,7 @@ COMMENT ON TABLE personal_finance.insurance_riders IS 'Additional riders attache
 COMMENT ON TABLE personal_finance.insurance_premium_payments IS 'History of premium payments';
 COMMENT ON TABLE personal_finance.insurance_bonus_history IS 'Bonus declarations for traditional plans';
 
-COMMENT ON COLUMN personal_finance.insurance_policies.plan_type IS 'Types: endowment, term, ulip, money_back, whole_life, pension, health, child';
+COMMENT ON COLUMN personal_finance.insurance_policies.plan_type IS 'Types: endowment, term, ulip, money_back, whole_life, pension, health, child, annuity';
 COMMENT ON COLUMN personal_finance.insurance_policies.premium_frequency IS 'Values: monthly, quarterly, half_yearly, annual, single';
 COMMENT ON COLUMN personal_finance.insurance_policies.status IS 'Values: active, paid_up, lapsed, matured, surrendered, claimed';
+COMMENT ON COLUMN personal_finance.insurance_policies.annuity_type IS 'For annuity plans: immediate, deferred, single_life, joint_life, joint_life_last_survivor';

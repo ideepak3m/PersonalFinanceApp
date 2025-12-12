@@ -9,7 +9,10 @@ import {
     POLICY_STATUSES,
     PAYMENT_MODES,
     RELATIONSHIPS,
-    RIDER_TYPES
+    RIDER_TYPES,
+    ANNUITY_TYPES,
+    ANNUITY_MODES,
+    isAnnuityPlan
 } from '../../services/insuranceService';
 
 const InsurancePolicyDetail = ({ policyId, onBack, onEdit }) => {
@@ -234,32 +237,68 @@ const InsurancePolicyDetail = ({ policyId, onBack, onEdit }) => {
 
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white rounded-lg shadow-sm border p-4">
-                    <p className="text-sm text-gray-500">Sum Assured</p>
-                    <p className="text-xl font-bold text-gray-900">
-                        {formatCurrency(policy.sum_assured, policy.currency)}
-                    </p>
-                </div>
-                <div className="bg-white rounded-lg shadow-sm border p-4">
-                    <p className="text-sm text-gray-500">Total Premiums Paid</p>
-                    <p className="text-xl font-bold text-gray-900">
-                        {formatCurrency(policy.total_premiums_paid, policy.currency)}
-                    </p>
-                </div>
-                <div className="bg-white rounded-lg shadow-sm border p-4">
-                    <p className="text-sm text-gray-500">Accrued Bonus</p>
-                    <p className="text-xl font-bold text-green-600">
-                        {formatCurrency((policy.accrued_bonus || 0) + (policy.terminal_bonus || 0), policy.currency)}
-                    </p>
-                </div>
-                <div className="bg-white rounded-lg shadow-sm border p-4">
-                    <p className="text-sm text-gray-500">Expected Maturity</p>
-                    <p className="text-xl font-bold text-blue-600">
-                        {policy.expected_maturity_value
-                            ? formatCurrency(policy.expected_maturity_value, policy.currency)
-                            : '-'}
-                    </p>
-                </div>
+                {isAnnuityPlan(policy.plan_type) ? (
+                    /* Annuity Summary Cards */
+                    <>
+                        <div className="bg-white rounded-lg shadow-sm border p-4">
+                            <p className="text-sm text-gray-500">Purchase Price</p>
+                            <p className="text-xl font-bold text-gray-900">
+                                {formatCurrency(policy.purchase_price, policy.currency)}
+                            </p>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-sm border p-4">
+                            <p className="text-sm text-gray-500">Annuity/Pension</p>
+                            <p className="text-xl font-bold text-green-600">
+                                {formatCurrency(policy.annuity_amount, policy.currency)}
+                            </p>
+                            <p className="text-xs text-gray-400 capitalize">{policy.annuity_mode}</p>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-sm border p-4">
+                            <p className="text-sm text-gray-500">Annuity Type</p>
+                            <p className="text-lg font-bold text-gray-900 capitalize">
+                                {policy.annuity_type?.replace(/_/g, ' ') || '-'}
+                            </p>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-sm border p-4">
+                            <p className="text-sm text-gray-500">Death Benefit</p>
+                            <p className="text-xl font-bold text-blue-600">
+                                {policy.sum_assured > 0
+                                    ? formatCurrency(policy.sum_assured, policy.currency)
+                                    : 'Not Applicable'}
+                            </p>
+                        </div>
+                    </>
+                ) : (
+                    /* Regular Policy Summary Cards */
+                    <>
+                        <div className="bg-white rounded-lg shadow-sm border p-4">
+                            <p className="text-sm text-gray-500">Sum Assured</p>
+                            <p className="text-xl font-bold text-gray-900">
+                                {formatCurrency(policy.sum_assured, policy.currency)}
+                            </p>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-sm border p-4">
+                            <p className="text-sm text-gray-500">Total Premiums Paid</p>
+                            <p className="text-xl font-bold text-gray-900">
+                                {formatCurrency(policy.total_premiums_paid, policy.currency)}
+                            </p>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-sm border p-4">
+                            <p className="text-sm text-gray-500">Accrued Bonus</p>
+                            <p className="text-xl font-bold text-green-600">
+                                {formatCurrency((policy.accrued_bonus || 0) + (policy.terminal_bonus || 0), policy.currency)}
+                            </p>
+                        </div>
+                        <div className="bg-white rounded-lg shadow-sm border p-4">
+                            <p className="text-sm text-gray-500">Expected Maturity</p>
+                            <p className="text-xl font-bold text-blue-600">
+                                {policy.expected_maturity_value
+                                    ? formatCurrency(policy.expected_maturity_value, policy.currency)
+                                    : '-'}
+                            </p>
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* Tabs */}
