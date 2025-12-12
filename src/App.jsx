@@ -34,6 +34,9 @@ import { ExpenseAnalysis } from './components/reports/ExpenseAnalysis';
 import { IncomeAnalysis } from './components/reports/IncomeAnalysis';
 import { InvestmentGrowth } from './components/reports/InvestmentGrowth';
 
+// Insurance
+import Insurance from './pages/Insurance';
+
 function App() {
   return (
     <AuthProvider>
@@ -69,6 +72,7 @@ function App() {
                           <Route path="investments" element={<InvestmentAccountsDashboard />} />
                           <Route path="properties" element={<Properties />} />
                           <Route path="properties/:propertyId" element={<PropertyDetails />} />
+                          <Route path="insurance" element={<Insurance />} />
                           <Route path="pdf-reader" element={<PDFTableReader />} />
 
                           {/* Reports */}

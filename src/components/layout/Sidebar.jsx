@@ -21,7 +21,8 @@ import {
     Building2,
     FolderOpen,
     Target,
-    BookOpen
+    BookOpen,
+    Shield
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -71,10 +72,11 @@ export const Sidebar = () => {
             key: 'investments',
             label: 'Investments',
             icon: TrendingUp,
-            basePaths: ['/investments', '/pdf-reader', '/properties'],
+            basePaths: ['/investments', '/pdf-reader', '/properties', '/insurance'],
             children: [
                 { path: '/investments', label: 'Investment Accounts', icon: Wallet },
                 { path: '/properties', label: 'Properties', icon: Building2 },
+                { path: '/insurance', label: 'Insurance Policies', icon: Shield },
                 { path: '/pdf-reader', label: 'Import Statement', icon: Upload },
             ]
         },
