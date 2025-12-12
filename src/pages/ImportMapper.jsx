@@ -24,6 +24,17 @@ export const ImportMapper = () => {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [suspenseAccount, setSuspenseAccount] = useState(null);
+    const [dateFormat, setDateFormat] = useState('auto'); // Date format for parsing
+
+    // Available date formats
+    const dateFormats = [
+        { value: 'auto', label: 'Auto Detect' },
+        { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY (US format)' },
+        { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY (UK/India format)' },
+        { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD (ISO format)' },
+        { value: 'DD-MM-YYYY', label: 'DD-MM-YYYY' },
+        { value: 'MM-DD-YYYY', label: 'MM-DD-YYYY' },
+    ];
 
     // Transaction fields that can be mapped
     const transactionFields = [
@@ -249,29 +260,70 @@ export const ImportMapper = () => {
                     mapped.amount = parseFloat(cleanAmount) || 0;
                 }
 
-                // Parse date - handle various formats
+                // Parse date - handle various formats based on user selection
                 if (mapped.date) {
                     try {
                         // Remove any timezone suffixes like [-5:EST]
                         let cleanDate = String(mapped.date).replace(/\[.*?\]/g, '').trim();
+                        let parsedDate = null;
 
-                        // Handle YYYYMMDD format
+                        // Handle YYYYMMDD format (common in QBO/QFX)
                         if (/^\d{8}/.test(cleanDate)) {
                             const year = cleanDate.substring(0, 4);
                             const month = cleanDate.substring(4, 6);
                             const day = cleanDate.substring(6, 8);
-                            cleanDate = `${year}-${month}-${day}`;
+                            parsedDate = new Date(year, parseInt(month) - 1, day);
+                        } else if (dateFormat !== 'auto') {
+                            // Remove time portion if present (e.g., "06/03/2025 06:21:08")
+                            const datePart = cleanDate.split(' ')[0];
+
+                            // Parse according to selected format
+                            const parts = datePart.split(/[\/\-\.]/);
+                            if (parts.length === 3) {
+                                let year, month, day;
+                                switch (dateFormat) {
+                                    case 'DD/MM/YYYY':
+                                    case 'DD-MM-YYYY':
+                                        day = parseInt(parts[0]);
+                                        month = parseInt(parts[1]) - 1;
+                                        year = parseInt(parts[2]);
+                                        break;
+                                    case 'MM/DD/YYYY':
+                                    case 'MM-DD-YYYY':
+                                        month = parseInt(parts[0]) - 1;
+                                        day = parseInt(parts[1]);
+                                        year = parseInt(parts[2]);
+                                        break;
+                                    case 'YYYY-MM-DD':
+                                        year = parseInt(parts[0]);
+                                        month = parseInt(parts[1]) - 1;
+                                        day = parseInt(parts[2]);
+                                        break;
+                                    default:
+                                        // Fall through to auto detect
+                                        break;
+                                }
+                                if (year && year < 100) year += 2000; // Handle 2-digit years
+                                if (year && month !== undefined && day) {
+                                    parsedDate = new Date(year, month, day);
+                                }
+                            }
                         }
 
-                        const date = new Date(cleanDate);
-                        if (!isNaN(date.getTime())) {
+                        // Auto detect if not already parsed
+                        if (!parsedDate || isNaN(parsedDate.getTime())) {
+                            parsedDate = new Date(cleanDate);
+                        }
+
+                        if (parsedDate && !isNaN(parsedDate.getTime())) {
                             // Format as YYYY-MM-DD for PostgreSQL date type
-                            const year = date.getFullYear();
-                            const month = String(date.getMonth() + 1).padStart(2, '0');
-                            const day = String(date.getDate()).padStart(2, '0');
+                            const year = parsedDate.getFullYear();
+                            const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+                            const day = String(parsedDate.getDate()).padStart(2, '0');
                             mapped.date = `${year}-${month}-${day}`;
                         } else {
                             // If parsing fails, use current date
+                            console.warn('Failed to parse date:', mapped.date);
                             mapped.date = new Date().toISOString().split('T')[0];
                         }
                     } catch (e) {
@@ -471,6 +523,27 @@ export const ImportMapper = () => {
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+
+                            {/* Date Format Selection */}
+                            <div className="border-t pt-4">
+                                <div className="grid grid-cols-2 gap-4 items-center">
+                                    <label className="text-sm font-medium text-gray-700">
+                                        📅 Date Format in CSV:
+                                    </label>
+                                    <select
+                                        value={dateFormat}
+                                        onChange={(e) => setDateFormat(e.target.value)}
+                                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        {dateFormats.map(fmt => (
+                                            <option key={fmt.value} value={fmt.value}>{fmt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    💡 If dates are appearing incorrectly (e.g., March showing as December), select the correct format used in your CSV file.
+                                </p>
                             </div>
 
                             {/* Preview */}

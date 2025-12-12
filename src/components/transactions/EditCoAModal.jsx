@@ -1,9 +1,10 @@
 // src/components/transactions/EditCoAModal.jsx
 import React, { useState } from 'react';
-import { X, Search, Check } from 'lucide-react';
+import { X, Search, Check, Loader2 } from 'lucide-react';
 
 export const EditCoAModal = ({ transaction, chartOfAccounts, onSave, onClose }) => {
     const [searchTerm, setSearchTerm] = useState('');
+    const [saving, setSaving] = useState(false);
     const [selectedCoA, setSelectedCoA] = useState(
         transaction.suggestion?.chartOfAccountId || ''
     );
@@ -12,23 +13,33 @@ export const EditCoAModal = ({ transaction, chartOfAccounts, onSave, onClose }) 
         coa.name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const handleAcceptSuggestion = () => {
+    const handleAcceptSuggestion = async () => {
         if (transaction.suggestion?.chartOfAccountId) {
-            onSave(transaction.suggestion.chartOfAccountId);
+            setSaving(true);
+            try {
+                await onSave(transaction.suggestion.chartOfAccountId);
+            } finally {
+                setSaving(false);
+            }
         }
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (selectedCoA) {
-            onSave(selectedCoA);
+            setSaving(true);
+            try {
+                await onSave(selectedCoA);
+            } finally {
+                setSaving(false);
+            }
         }
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col relative">
                 {/* Header */}
-                <div className="px-6 py-4 border-b flex justify-between items-center">
+                <div className="px-6 py-4 border-b flex justify-between items-center flex-shrink-0">
                     <div>
                         <h2 className="text-xl font-bold text-gray-900">Edit Transaction</h2>
                         <p className="text-sm text-gray-600 mt-1">
@@ -38,13 +49,25 @@ export const EditCoAModal = ({ transaction, chartOfAccounts, onSave, onClose }) 
                     <button
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600"
+                        disabled={saving}
                     >
                         <X className="w-6 h-6" />
                     </button>
                 </div>
 
-                {/* Body */}
-                <div className="px-6 py-4">
+                {/* Saving overlay */}
+                {saving && (
+                    <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
+                        <div className="flex flex-col items-center gap-3">
+                            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                            <p className="text-gray-700 font-medium">Saving changes...</p>
+                            <p className="text-gray-500 text-sm">This may take a moment for multiple transactions</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Body - scrollable */}
+                <div className="px-6 py-4 overflow-y-auto flex-1">
                     {/* Show suggestion if available */}
                     {transaction.suggestion?.type === 'coa' && (
                         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -62,9 +85,10 @@ export const EditCoAModal = ({ transaction, chartOfAccounts, onSave, onClose }) 
                                 </div>
                                 <button
                                     onClick={handleAcceptSuggestion}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                                    disabled={saving}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 flex items-center gap-2"
                                 >
-                                    <Check className="w-4 h-4" />
+                                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                                     Accept
                                 </button>
                             </div>
@@ -90,7 +114,7 @@ export const EditCoAModal = ({ transaction, chartOfAccounts, onSave, onClose }) 
                     </div>
 
                     {/* Results List */}
-                    <div className="border rounded-lg max-h-96 overflow-y-auto">
+                    <div className="border rounded-lg max-h-64 overflow-y-auto">
                         {filteredCoA.length === 0 ? (
                             <div className="px-4 py-8 text-center text-gray-500">
                                 No accounts found
@@ -124,20 +148,22 @@ export const EditCoAModal = ({ transaction, chartOfAccounts, onSave, onClose }) 
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3">
+                {/* Footer - always visible */}
+                <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3 flex-shrink-0">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 border rounded-lg hover:bg-gray-100"
+                        disabled={saving}
+                        className="px-4 py-2 border rounded-lg hover:bg-gray-100 disabled:bg-gray-100 disabled:text-gray-400"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
-                        disabled={!selectedCoA}
-                        className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        disabled={!selectedCoA || saving}
+                        className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
                     >
-                        Save Selection
+                        {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {saving ? 'Saving...' : 'Save Selection'}
                     </button>
                 </div>
             </div>

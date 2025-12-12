@@ -211,24 +211,26 @@ const extractTag = (text, tagName) => {
 };
 
 // Map OFX transactions to app format
+// Amount is always stored as positive, type indicates debit/credit
 export const mapQBOQFXToTransactions = (ofxTxns, accountId) => {
     console.log('🗺️ Mapping', ofxTxns.length, 'OFX transactions to app format');
 
     return ofxTxns.map((txn, index) => {
-        const amount = txn.parsedAmount || parseFloat(txn.TRNAMT || 0);
+        const rawAmount = txn.parsedAmount || parseFloat(txn.TRNAMT || 0);
         const date = txn.parsedDate || new Date().toISOString().split('T')[0];
         const description = txn.parsedDescription || txn.NAME || txn.MEMO || 'Transaction';
 
-        // Categorize based on merchant name
-        //const category = categorizeTransaction(description, amount);
+        // Determine type from amount sign, then store abs(amount)
+        const type = rawAmount < 0 ? 'debit' : 'credit';
+        const amount = Math.abs(rawAmount);
 
         return {
             id: txn.FITID || `txn_${Date.now()}_${index}`,
             accountId: accountId,
             productId: null, // Can be linked to a product later
             date: date,
-            amount: amount,
-            type: amount >= 0 ? 'credit' : 'debit',
+            amount: amount,  // Always positive
+            type: type,  // 'debit' or 'credit'
             //category: category,
             category_id: null, // To be set based on category mapping
             description: description,
@@ -298,20 +300,100 @@ const categorizeTransaction = (description, amount) => {
     return 'Other';
 };
 
+// Helper to normalize transaction type to 'debit' or 'credit'
+const normalizeTransactionType = (typeValue) => {
+    if (!typeValue) return null;
+    const normalized = typeValue.toString().toUpperCase().trim().replace(/\./g, '');
+
+    if (['DR', 'D', 'DEBIT', 'WITHDRAWAL', 'EXPENSE', 'PAYMENT'].includes(normalized)) {
+        return 'debit';
+    }
+    if (['CR', 'C', 'CREDIT', 'DEPOSIT', 'INCOME', 'REFUND'].includes(normalized)) {
+        return 'credit';
+    }
+    return null;
+};
+
+// Helper to parse amount and type from various CSV formats
+// Returns { amount: number (always positive), type: 'debit' | 'credit' }
+const parseAmountAndTypeFromRow = (row) => {
+    // Check for separate Withdrawal/Deposit columns (common in Indian bank statements)
+    const withdrawalAmount = Math.abs(parseFloat(
+        row['Withdrawal Amt.'] || row['Withdrawal Amount'] || row['Withdrawal Amt'] ||
+        row['withdrawal_amt'] || row['withdrawal'] || 0
+    )) || 0;
+
+    const depositAmount = Math.abs(parseFloat(
+        row['Deposit Amt.'] || row['Deposit Amount'] || row['Deposit Amt'] ||
+        row['deposit_amt'] || row['deposit'] || 0
+    )) || 0;
+
+    // If we have separate withdrawal/deposit columns
+    if (withdrawalAmount > 0 || depositAmount > 0) {
+        if (depositAmount > 0) {
+            return { amount: depositAmount, type: 'credit' };
+        } else {
+            return { amount: withdrawalAmount, type: 'debit' };
+        }
+    }
+
+    // Check for separate Debit/Credit amount columns
+    const debitColAmount = Math.abs(parseFloat(row['Debit'] || row['debit'] || 0)) || 0;
+    const creditColAmount = Math.abs(parseFloat(row['Credit'] || row['credit'] || 0)) || 0;
+
+    if (debitColAmount > 0 || creditColAmount > 0) {
+        if (creditColAmount > 0) {
+            return { amount: creditColAmount, type: 'credit' };
+        } else {
+            return { amount: debitColAmount, type: 'debit' };
+        }
+    }
+
+    // Check for Dr/Cr type indicator column
+    const drCrRaw = row['Dr/Cr'] || row['Dr / Cr'] || row['DRCR'] || row['dr_cr'] ||
+        row['Type'] || row['type'] || row['Transaction Type'] || '';
+    const typeFromIndicator = normalizeTransactionType(drCrRaw);
+
+    // Get the raw amount value
+    let rawAmount = parseFloat(
+        row.amount || row.Amount || row.AMOUNT ||
+        row['Transaction Amount'] || row['Txn Amount'] || row['Txn Amt'] ||
+        row['Amount (INR)'] || row['Amount(INR)'] || 0
+    ) || 0;
+
+    // If we have a type indicator, use it
+    if (typeFromIndicator) {
+        return { amount: Math.abs(rawAmount), type: typeFromIndicator };
+    }
+
+    // No type indicator - infer from amount sign
+    // Negative amount = debit (expense), Positive amount = credit (income)
+    if (rawAmount < 0) {
+        return { amount: Math.abs(rawAmount), type: 'debit' };
+    } else {
+        return { amount: Math.abs(rawAmount), type: 'credit' };
+    }
+};
+
 // Map CSV to transactions
+// Amount is always stored as positive, type indicates debit/credit
 export const mapCSVToTransactions = (csvData, accountId) => {
-    return csvData.map((row, index) => ({
-        id: `csv_${Date.now()}_${index}`,
-        accountId: accountId,
-        productId: null,
-        date: row.date || row.Date || row.DATE || new Date().toISOString().split('T')[0],
-        description: row.description || row.Description || row.DESCRIPTION || '',
-        amount: parseFloat(row.amount || row.Amount || row.AMOUNT || 0),
-        //category: row.category || row.Category || row.CATEGORY || 'Other',
-        category_id: null, // To be set based on category mapping
-        type: parseFloat(row.amount || row.Amount || row.AMOUNT || 0) >= 0 ? 'credit' : 'debit',
-        memo: row.memo || row.Memo || ''
-    }));
+    return csvData.map((row, index) => {
+        const { amount, type } = parseAmountAndTypeFromRow(row);
+
+        return {
+            id: `csv_${Date.now()}_${index}`,
+            accountId: accountId,
+            productId: null,
+            date: row.date || row.Date || row.DATE || row['Transaction Date'] || row['Txn Date'] || row['Value Date'] || new Date().toISOString().split('T')[0],
+            description: row.description || row.Description || row.DESCRIPTION || row.Narration || row.narration || row.Particulars || row.particulars || '',
+            amount: amount,  // Always positive
+            //category: row.category || row.Category || row.CATEGORY || 'Other',
+            category_id: null, // To be set based on category mapping
+            type: type,  // 'debit' or 'credit'
+            memo: row.memo || row.Memo || row.Remarks || row.remarks || ''
+        };
+    });
 };
 
 // Validate transaction
@@ -355,11 +437,15 @@ export const exportTransactionsToCSV = (transactions) => {
     document.body.removeChild(link);
 };
 
+// Export the normalizeTransactionType helper for use elsewhere
+export { normalizeTransactionType };
+
 export default {
     parseCSV,
     parseQBOQFX,
     mapCSVToTransactions,
     mapQBOQFXToTransactions,
     validateTransaction,
-    exportTransactionsToCSV
+    exportTransactionsToCSV,
+    normalizeTransactionType
 };

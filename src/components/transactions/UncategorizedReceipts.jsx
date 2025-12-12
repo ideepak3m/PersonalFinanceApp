@@ -1,8 +1,7 @@
 // src/components/transactions/UncategorizedReceipts.jsx
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Search, ChevronLeft, Loader2 } from 'lucide-react';
-import { TransactionUpload } from './TransactionUpload';
+import { ChevronLeft, Loader2 } from 'lucide-react';
 import { EditCoAModal } from './EditCoAModal';
 import { ImprovedSplitModal } from './ImprovedSplitModal';
 import { useConfirmModal } from '../common/ConfirmModal';
@@ -45,6 +44,10 @@ export const UncategorizedReceipts = () => {
     // Bulk update progress
     const [bulkUpdating, setBulkUpdating] = useState(false);
     const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0, status: '' });
+
+    // Undo state for merchant assignments
+    const [lastMerchantAssignment, setLastMerchantAssignment] = useState(null);
+    // Structure: { merchantName, affectedTransactions: [{ id, previousMerchantId, previousCoaId }], timestamp }
 
     useEffect(() => {
         loadData();
@@ -580,6 +583,80 @@ export const UncategorizedReceipts = () => {
         }
     };
 
+    // Undo last merchant assignment
+    const handleUndoMerchantAssignment = async () => {
+        if (!lastMerchantAssignment) return;
+
+        const { merchantName, affectedTransactions } = lastMerchantAssignment;
+
+        const shouldUndo = await confirm(
+            `Undo merchant assignment for "${merchantName}"?\n\nThis will revert ${affectedTransactions.length} transaction(s) to their previous state.`,
+            'Undo Merchant Assignment'
+        );
+
+        if (!shouldUndo) return;
+
+        try {
+            setLoading(true);
+
+            for (const txnData of affectedTransactions) {
+                await transactionsDB.update(txnData.id, {
+                    normalized_merchant_id: txnData.previousMerchantId || null,
+                    chart_of_account_id: txnData.previousCoaId || suspenseAccount?.id || null,
+                    status: 'uncategorized'
+                });
+            }
+
+            // Clear the undo state
+            setLastMerchantAssignment(null);
+
+            await loadTransactions();
+            await alert(`Successfully reverted ${affectedTransactions.length} transaction(s).`, 'Undo Complete', 'success');
+
+        } catch (error) {
+            console.error('Undo error:', error);
+            await alert('Failed to undo: ' + error.message, 'Error', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Helper function to assign merchant with undo support
+    const assignMerchantWithUndo = async (primaryTxn, merchant, similarTxns, coaId = null) => {
+        // Capture previous state for undo
+        const affectedTransactions = [
+            {
+                id: primaryTxn.id,
+                previousMerchantId: primaryTxn.normalized_merchant_id,
+                previousCoaId: primaryTxn.chart_of_account_id
+            },
+            ...similarTxns.map(t => ({
+                id: t.id,
+                previousMerchantId: t.normalized_merchant_id,
+                previousCoaId: t.chart_of_account_id
+            }))
+        ];
+
+        // Update primary transaction
+        const primaryUpdate = { normalized_merchant_id: merchant.id };
+        if (coaId) primaryUpdate.chart_of_account_id = coaId;
+        await transactionsDB.update(primaryTxn.id, primaryUpdate);
+
+        // Update similar transactions
+        for (const similarTxn of similarTxns) {
+            const updateData = { normalized_merchant_id: merchant.id };
+            if (coaId) updateData.chart_of_account_id = coaId;
+            await transactionsDB.update(similarTxn.id, updateData);
+        }
+
+        // Save undo state
+        setLastMerchantAssignment({
+            merchantName: merchant.normalized_name,
+            affectedTransactions,
+            timestamp: Date.now()
+        });
+    };
+
     const handleDelete = async (txn) => {
         if (txn.splitReady) {
             // Ask if delete split or transaction
@@ -720,23 +797,6 @@ export const UncategorizedReceipts = () => {
                 <h1 className="text-2xl font-bold text-gray-900">
                     Uncategorized Receipts
                 </h1>
-                <div className="flex gap-3">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Search..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-10 pr-4 py-2 border rounded-lg"
-                        />
-                    </div>
-                    <TransactionUpload
-                        accounts={[account].filter(Boolean)}
-                        onUpload={(file) => handleUpload(file)}
-                        loading={loading}
-                    />
-                </div>
             </div>
 
             {/* Bulk Update Progress Modal */}
@@ -760,6 +820,34 @@ export const UncategorizedReceipts = () => {
                             </div>
                         </div>
                         <p className="text-sm text-gray-500 truncate">{bulkProgress.status}</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Undo Banner */}
+            {lastMerchantAssignment && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-yellow-800">
+                                ↩️ Last action: Assigned <strong>{lastMerchantAssignment.merchantName}</strong> to {lastMerchantAssignment.affectedTransactions.length} transaction(s)
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleUndoMerchantAssignment}
+                                disabled={loading}
+                                className="px-4 py-1.5 bg-yellow-600 text-white rounded hover:bg-yellow-700 font-medium text-sm disabled:opacity-50"
+                            >
+                                Undo
+                            </button>
+                            <button
+                                onClick={() => setLastMerchantAssignment(null)}
+                                className="px-2 py-1.5 text-yellow-700 hover:text-yellow-900 text-sm"
+                            >
+                                ✕ Dismiss
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -969,36 +1057,20 @@ export const UncategorizedReceipts = () => {
                                                                                         : `Merchant "${merchant.normalized_name}" maps to "${matchedCoa.name}".\n\nWould you like to apply this COA?`;
 
                                                                                     if (await confirm(applyCoaMsg, 'Apply COA')) {
-                                                                                        // Apply COA to current transaction
-                                                                                        await transactionsDB.update(txn.id, {
-                                                                                            chart_of_account_id: matchedCoa.id
-                                                                                        });
-
-                                                                                        // Apply to similar transactions too
-                                                                                        for (const similarTxn of similarTxns) {
-                                                                                            await transactionsDB.update(similarTxn.id, {
-                                                                                                normalized_merchant_id: merchant.id,
-                                                                                                chart_of_account_id: matchedCoa.id
-                                                                                            });
-                                                                                        }
+                                                                                        // Apply merchant + COA to current and similar transactions with undo support
+                                                                                        await assignMerchantWithUndo(txn, merchant, similarTxns, matchedCoa.id);
                                                                                     } else if (similarTxns.length > 0) {
                                                                                         // User declined COA but ask about merchant linking
                                                                                         if (await confirm(`Would you still like to assign "${merchant.normalized_name}" to the ${similarTxns.length} other similar transactions?`, 'Assign Merchant')) {
-                                                                                            for (const similarTxn of similarTxns) {
-                                                                                                await transactionsDB.update(similarTxn.id, {
-                                                                                                    normalized_merchant_id: merchant.id
-                                                                                                });
-                                                                                            }
+                                                                                            // Apply merchant only to similar transactions with undo support
+                                                                                            await assignMerchantWithUndo(txn, merchant, similarTxns, null);
                                                                                         }
                                                                                     }
                                                                                 } else if (similarTxns.length > 0) {
                                                                                     // No COA match, just offer merchant linking
                                                                                     if (await confirm(`Found ${similarTxns.length} other transaction(s) with similar descriptions.\n\nWould you like to also assign "${merchant.normalized_name}" to those transactions?`, 'Assign Merchant')) {
-                                                                                        for (const similarTxn of similarTxns) {
-                                                                                            await transactionsDB.update(similarTxn.id, {
-                                                                                                normalized_merchant_id: merchant.id
-                                                                                            });
-                                                                                        }
+                                                                                        // Apply merchant to similar transactions with undo support
+                                                                                        await assignMerchantWithUndo(txn, merchant, similarTxns, null);
                                                                                     }
                                                                                 }
 
@@ -1054,11 +1126,8 @@ export const UncategorizedReceipts = () => {
                                                                                 );
 
                                                                                 if (applyToOthers) {
-                                                                                    for (const similarTxn of similarTxns) {
-                                                                                        await transactionsDB.update(similarTxn.id, {
-                                                                                            normalized_merchant_id: newMerchant.id
-                                                                                        });
-                                                                                    }
+                                                                                    // Use undo-enabled function for new merchant too
+                                                                                    await assignMerchantWithUndo(txn, newMerchant, similarTxns, null);
                                                                                 }
                                                                             }
 
@@ -1130,11 +1199,11 @@ export const UncategorizedReceipts = () => {
                                         )}
                                     </div>
                                 </td>
-                                <td className={`px-4 py-3 text-sm text-right font-medium ${txn.amount > 0 ? 'text-green-600' : 'text-red-600'
+                                <td className={`px-4 py-3 text-sm text-right font-medium ${txn.type === 'credit' ? 'text-green-600' : 'text-red-600'
                                     }`}>
                                     <div>
-                                        <div>{txn.amount > 0 ? '+' : '-'}${Math.abs(txn.amount).toFixed(2)}</div>
-                                        {txn.amount > 0 && (
+                                        <div>{txn.type === 'credit' ? '+' : '-'}${Math.abs(txn.amount).toFixed(2)}</div>
+                                        {txn.type === 'credit' && (
                                             <div className="text-xs text-green-600 font-normal">Refund</div>
                                         )}
                                     </div>

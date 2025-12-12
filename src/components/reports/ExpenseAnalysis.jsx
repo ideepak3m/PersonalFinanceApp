@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
     transactionsDB,
     categoryDB,
-    chartOfAccountsDB
+    chartOfAccountsDB,
+    accountsDB
 } from '../../services/database';
 import {
     PieChart,
@@ -34,6 +35,9 @@ export const ExpenseAnalysis = () => {
     const [categories, setCategories] = useState([]);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedMonth, setSelectedMonth] = useState(null); // null = all months
+    const [selectedCountry, setSelectedCountry] = useState('all'); // 'all' or country code
+    const [accounts, setAccounts] = useState([]); // Bank/credit card accounts
+    const [availableCountries, setAvailableCountries] = useState([]); // Countries from accounts
     const [viewMode, setViewMode] = useState('category'); // 'category' | 'monthly' | 'yoy'
     const [selectedCategory, setSelectedCategory] = useState(null); // For drill-down modal
     const [chartOfAccounts, setChartOfAccounts] = useState([]); // For COA dropdown
@@ -42,7 +46,7 @@ export const ExpenseAnalysis = () => {
 
     useEffect(() => {
         loadData();
-    }, [selectedYear]);
+    }, [selectedYear, selectedCountry]);
 
     const loadData = async () => {
         setLoading(true);
@@ -50,6 +54,27 @@ export const ExpenseAnalysis = () => {
 
         try {
             console.log('ExpenseAnalysis: Starting to load data...');
+
+            // Load accounts to get countries
+            const accts = await accountsDB.getAll();
+            console.log('ExpenseAnalysis: Accounts loaded:', accts?.length);
+            setAccounts(accts || []);
+
+            // Extract unique countries from accounts
+            const countries = [...new Set((accts || []).map(a => a.country).filter(Boolean))].sort();
+            console.log('ExpenseAnalysis: Available countries:', countries);
+            setAvailableCountries(countries);
+
+            // Get account IDs for selected country (for filtering transactions)
+            let countryAccountIds = null;
+            if (selectedCountry !== 'all') {
+                countryAccountIds = new Set(
+                    (accts || [])
+                        .filter(a => a.country === selectedCountry)
+                        .map(a => a.id)
+                );
+                console.log('ExpenseAnalysis: Filtering by country accounts:', countryAccountIds.size);
+            }
 
             // Load categories and chart of accounts first (for lookups)
             const cats = await categoryDB.getAll();
@@ -84,9 +109,17 @@ export const ExpenseAnalysis = () => {
             const allTxns = await transactionsDB.getAll();
             console.log('ExpenseAnalysis: All transactions loaded:', allTxns?.length);
 
-            // Filter by date range and user
+            // Filter by date range and optionally by country (via account)
             const txns = (allTxns || []).filter(t => {
-                return t.date >= startDate && t.date <= endDate;
+                // Date filter
+                if (t.date < startDate || t.date > endDate) return false;
+
+                // Country filter (via account_id)
+                if (countryAccountIds && t.account_id) {
+                    if (!countryAccountIds.has(t.account_id)) return false;
+                }
+
+                return true;
             });
 
             // Enrich transactions with category and COA data
@@ -248,10 +281,23 @@ export const ExpenseAnalysis = () => {
         'bg-pink-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-cyan-500'
     ];
 
+    // Country to currency/locale mapping
+    const countryCurrencyMap = {
+        'Canada': { currency: 'CAD', locale: 'en-CA' },
+        'India': { currency: 'INR', locale: 'en-IN' },
+        'USA': { currency: 'USD', locale: 'en-US' },
+        'United States': { currency: 'USD', locale: 'en-US' },
+        'UK': { currency: 'GBP', locale: 'en-GB' },
+        'United Kingdom': { currency: 'GBP', locale: 'en-GB' },
+        'Australia': { currency: 'AUD', locale: 'en-AU' },
+        'default': { currency: 'USD', locale: 'en-US' }
+    };
+
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-CA', {
+        const countryConfig = countryCurrencyMap[selectedCountry] || countryCurrencyMap['default'];
+        return new Intl.NumberFormat(countryConfig.locale, {
             style: 'currency',
-            currency: 'CAD'
+            currency: countryConfig.currency
         }).format(amount || 0);
     };
 
@@ -288,7 +334,18 @@ export const ExpenseAnalysis = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    {/* Country Filter */}
+                    <select
+                        value={selectedCountry}
+                        onChange={(e) => setSelectedCountry(e.target.value)}
+                        className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="all">All Countries</option>
+                        {availableCountries.map(country => (
+                            <option key={country} value={country}>{country}</option>
+                        ))}
+                    </select>
                     <select
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}

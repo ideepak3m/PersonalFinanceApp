@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
     transactionsDB,
     categoryDB,
-    chartOfAccountsDB
+    chartOfAccountsDB,
+    accountsDB
 } from '../../services/database';
 import {
     TrendingUp,
@@ -12,7 +13,8 @@ import {
     AlertCircle,
     Briefcase,
     PiggyBank,
-    BarChart3
+    BarChart3,
+    X
 } from 'lucide-react';
 
 const MONTHS = [
@@ -32,16 +34,34 @@ export const IncomeAnalysis = () => {
     const [transactions, setTransactions] = useState([]);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedMonth, setSelectedMonth] = useState(null);
+    const [selectedCountry, setSelectedCountry] = useState('all');
+    const [availableCountries, setAvailableCountries] = useState([]);
+    const [selectedSource, setSelectedSource] = useState(null); // For drill-down modal
 
     useEffect(() => {
         loadData();
-    }, [selectedYear]);
+    }, [selectedYear, selectedCountry]);
 
     const loadData = async () => {
         setLoading(true);
         setError(null);
 
         try {
+            // Load accounts to get countries
+            const accts = await accountsDB.getAll();
+            const countries = [...new Set((accts || []).map(a => a.country).filter(Boolean))].sort();
+            setAvailableCountries(countries);
+
+            // Get account IDs for selected country
+            let countryAccountIds = null;
+            if (selectedCountry !== 'all') {
+                countryAccountIds = new Set(
+                    (accts || [])
+                        .filter(a => a.country === selectedCountry)
+                        .map(a => a.id)
+                );
+            }
+
             // Load categories and chart of accounts first (for lookups)
             const cats = await categoryDB.getAll();
             const coa = await chartOfAccountsDB.getAll();
@@ -66,9 +86,13 @@ export const IncomeAnalysis = () => {
 
             const allTxns = await transactionsDB.getAll();
 
-            // Filter by date range
+            // Filter by date range and optionally by country
             const txns = (allTxns || []).filter(t => {
-                return t.date >= startDate && t.date <= endDate;
+                if (t.date < startDate || t.date > endDate) return false;
+                if (countryAccountIds && t.account_id) {
+                    if (!countryAccountIds.has(t.account_id)) return false;
+                }
+                return true;
             });
 
             // Enrich transactions with category and COA data
@@ -192,10 +216,23 @@ export const IncomeAnalysis = () => {
         };
     }, [transactions, selectedMonth]);
 
+    // Country to currency/locale mapping
+    const countryCurrencyMap = {
+        'Canada': { currency: 'CAD', locale: 'en-CA' },
+        'India': { currency: 'INR', locale: 'en-IN' },
+        'USA': { currency: 'USD', locale: 'en-US' },
+        'United States': { currency: 'USD', locale: 'en-US' },
+        'UK': { currency: 'GBP', locale: 'en-GB' },
+        'United Kingdom': { currency: 'GBP', locale: 'en-GB' },
+        'Australia': { currency: 'AUD', locale: 'en-AU' },
+        'default': { currency: 'USD', locale: 'en-US' }
+    };
+
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-CA', {
+        const countryConfig = countryCurrencyMap[selectedCountry] || countryCurrencyMap['default'];
+        return new Intl.NumberFormat(countryConfig.locale, {
             style: 'currency',
-            currency: 'CAD'
+            currency: countryConfig.currency
         }).format(amount || 0);
     };
 
@@ -251,7 +288,17 @@ export const IncomeAnalysis = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <select
+                        value={selectedCountry}
+                        onChange={(e) => setSelectedCountry(e.target.value)}
+                        className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="all">All Countries</option>
+                        {availableCountries.map(country => (
+                            <option key={country} value={country}>{country}</option>
+                        ))}
+                    </select>
                     <select
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}
@@ -406,7 +453,11 @@ export const IncomeAnalysis = () => {
                     </h2>
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                         {metrics.bySource.slice(0, 10).map((source, idx) => (
-                            <div key={source.name} className="flex items-center gap-3">
+                            <div
+                                key={source.name}
+                                className="flex items-center gap-3 cursor-pointer hover:bg-gray-700/50 p-2 rounded-lg transition-colors"
+                                onClick={() => setSelectedSource(source.name)}
+                            >
                                 <div className={`w-3 h-3 rounded-full ${sourceColors[idx % sourceColors.length]}`} />
                                 <div className="flex-1">
                                     <div className="flex justify-between items-center mb-1">
@@ -428,6 +479,7 @@ export const IncomeAnalysis = () => {
                             </div>
                         ))}
                     </div>
+                    <p className="text-xs text-gray-500 mt-3 text-center">Click a source to see details</p>
                 </div>
             </div>
 
@@ -448,7 +500,11 @@ export const IncomeAnalysis = () => {
                         </thead>
                         <tbody className="divide-y divide-gray-700">
                             {metrics.bySource.map((source, idx) => (
-                                <tr key={source.name} className="hover:bg-gray-700/30">
+                                <tr
+                                    key={source.name}
+                                    className="hover:bg-gray-700/30 cursor-pointer"
+                                    onClick={() => setSelectedSource(source.name)}
+                                >
                                     <td className="px-4 py-3">
                                         <div className="flex items-center gap-2">
                                             <div className={`w-2 h-2 rounded-full ${sourceColors[idx % sourceColors.length]}`} />
@@ -485,6 +541,97 @@ export const IncomeAnalysis = () => {
                     </table>
                 </div>
             </div>
+
+            {/* Income Source Transactions Modal */}
+            {selectedSource && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedSource(null)}>
+                    <div
+                        className="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-4xl max-h-[80vh] overflow-hidden m-4"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+                            <div>
+                                <h3 className="text-lg font-semibold text-white">{selectedSource}</h3>
+                                <p className="text-sm text-gray-400">
+                                    {transactions.filter(t => (t.chart_of_account?.name || t.category?.name || 'Other Income') === selectedSource).length} transactions
+                                    {selectedMonth !== null ? ` in ${MONTHS[selectedMonth]}` : ''} {selectedYear}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedSource(null)}
+                                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                            >
+                                <X className="w-5 h-5 text-gray-400" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body - Transaction List */}
+                        <div className="overflow-y-auto max-h-[calc(80vh-120px)]">
+                            <table className="w-full text-sm">
+                                <thead className="bg-gray-700/50 sticky top-0">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left font-medium text-gray-400">Date</th>
+                                        <th className="px-4 py-3 text-left font-medium text-gray-400">Description</th>
+                                        <th className="px-4 py-3 text-left font-medium text-gray-400">Source</th>
+                                        <th className="px-4 py-3 text-right font-medium text-gray-400">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-700">
+                                    {transactions
+                                        .filter(t => {
+                                            const sourceName = t.chart_of_account?.name || t.category?.name || 'Other Income';
+                                            if (sourceName !== selectedSource) return false;
+                                            if (selectedMonth !== null) {
+                                                const month = new Date(t.date).getMonth();
+                                                return month === selectedMonth;
+                                            }
+                                            return true;
+                                        })
+                                        .sort((a, b) => new Date(b.date) - new Date(a.date))
+                                        .map(txn => (
+                                            <tr key={txn.id} className="hover:bg-gray-700/30">
+                                                <td className="px-4 py-3 text-gray-300 whitespace-nowrap">
+                                                    {new Date(txn.date).toLocaleDateString('en-CA')}
+                                                </td>
+                                                <td className="px-4 py-3 text-gray-300 max-w-xs truncate" title={txn.description}>
+                                                    {txn.description || txn.raw_merchant_name || '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-gray-400">
+                                                    {txn.chart_of_account?.name || '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-green-400 font-medium whitespace-nowrap">
+                                                    {formatCurrency(Math.abs(parseFloat(txn.amount)))}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    }
+                                </tbody>
+                                <tfoot className="bg-gray-700/30">
+                                    <tr>
+                                        <td colSpan="3" className="px-4 py-3 font-medium text-white">Total</td>
+                                        <td className="px-4 py-3 text-right font-bold text-green-400">
+                                            {formatCurrency(
+                                                transactions
+                                                    .filter(t => {
+                                                        const sourceName = t.chart_of_account?.name || t.category?.name || 'Other Income';
+                                                        if (sourceName !== selectedSource) return false;
+                                                        if (selectedMonth !== null) {
+                                                            const month = new Date(t.date).getMonth();
+                                                            return month === selectedMonth;
+                                                        }
+                                                        return true;
+                                                    })
+                                                    .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount) || 0), 0)
+                                            )}
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
