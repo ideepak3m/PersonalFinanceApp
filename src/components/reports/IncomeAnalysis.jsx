@@ -5,6 +5,7 @@ import {
     chartOfAccountsDB,
     accountsDB
 } from '../../services/database';
+import { getBaseCountry } from '../../services/settingsService';
 import {
     TrendingUp,
     Calendar,
@@ -14,7 +15,10 @@ import {
     Briefcase,
     PiggyBank,
     BarChart3,
-    X
+    X,
+    Home,
+    Building2,
+    Coins
 } from 'lucide-react';
 
 const MONTHS = [
@@ -34,29 +38,50 @@ export const IncomeAnalysis = () => {
     const [transactions, setTransactions] = useState([]);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedMonth, setSelectedMonth] = useState(null);
-    const [selectedCountry, setSelectedCountry] = useState('all');
+    const [selectedCountry, setSelectedCountry] = useState(null); // null until initialized
     const [availableCountries, setAvailableCountries] = useState([]);
+    const [accounts, setAccounts] = useState([]);
     const [selectedSource, setSelectedSource] = useState(null); // For drill-down modal
+    const [initialized, setInitialized] = useState(false);
+
+    // Initialize with base country from settings
+    useEffect(() => {
+        const initCountry = async () => {
+            const accts = await accountsDB.getAll();
+            const countries = [...new Set((accts || []).map(a => a.country).filter(Boolean))].sort();
+            setAvailableCountries(countries);
+            setAccounts(accts || []);
+
+            // Get base country from settings, fallback to first available
+            const baseCountry = getBaseCountry();
+            if (baseCountry && countries.includes(baseCountry)) {
+                setSelectedCountry(baseCountry);
+            } else if (countries.length > 0) {
+                setSelectedCountry(countries[0]);
+            } else {
+                setSelectedCountry('all');
+            }
+            setInitialized(true);
+        };
+        initCountry();
+    }, []);
 
     useEffect(() => {
-        loadData();
-    }, [selectedYear, selectedCountry]);
+        if (initialized) {
+            loadData();
+        }
+    }, [selectedYear, selectedCountry, initialized]);
 
     const loadData = async () => {
         setLoading(true);
         setError(null);
 
         try {
-            // Load accounts to get countries
-            const accts = await accountsDB.getAll();
-            const countries = [...new Set((accts || []).map(a => a.country).filter(Boolean))].sort();
-            setAvailableCountries(countries);
-
             // Get account IDs for selected country
             let countryAccountIds = null;
-            if (selectedCountry !== 'all') {
+            if (selectedCountry && selectedCountry !== 'all') {
                 countryAccountIds = new Set(
-                    (accts || [])
+                    accounts
                         .filter(a => a.country === selectedCountry)
                         .map(a => a.id)
                 );
@@ -290,11 +315,10 @@ export const IncomeAnalysis = () => {
                 {/* Filters */}
                 <div className="flex items-center gap-3 flex-wrap">
                     <select
-                        value={selectedCountry}
+                        value={selectedCountry || ''}
                         onChange={(e) => setSelectedCountry(e.target.value)}
                         className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
                     >
-                        <option value="all">All Countries</option>
                         {availableCountries.map(country => (
                             <option key={country} value={country}>{country}</option>
                         ))}
@@ -339,7 +363,7 @@ export const IncomeAnalysis = () => {
                             </p>
                         </div>
                         <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
-                            <DollarSign className="w-6 h-6 text-green-400" />
+                            <TrendingUp className="w-6 h-6 text-green-400" />
                         </div>
                     </div>
                     <p className="text-sm text-gray-500 mt-2">
@@ -365,20 +389,53 @@ export const IncomeAnalysis = () => {
                 </div>
 
                 <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-gray-400 text-sm">Income Sources</p>
-                            <p className="text-2xl font-bold text-purple-400 mt-1">
-                                {metrics.bySource.length}
-                            </p>
+                    <p className="text-gray-400 text-sm mb-3">Income Breakdown</p>
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center">
+                                    <Briefcase className="w-3 h-3 text-blue-400" />
+                                </div>
+                                <span className="text-gray-300 text-xs">Salary</span>
+                            </div>
+                            <span className="text-blue-400 font-semibold text-sm">
+                                {formatCurrency(metrics.incomeTypes['Employment'])}
+                            </span>
                         </div>
-                        <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center">
-                            <BarChart3 className="w-6 h-6 text-purple-400" />
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center">
+                                    <Home className="w-3 h-3 text-green-400" />
+                                </div>
+                                <span className="text-gray-300 text-xs">Rental</span>
+                            </div>
+                            <span className="text-green-400 font-semibold text-sm">
+                                {formatCurrency(metrics.incomeTypes['Rental'])}
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center">
+                                    <TrendingUp className="w-3 h-3 text-purple-400" />
+                                </div>
+                                <span className="text-gray-300 text-xs">Investment</span>
+                            </div>
+                            <span className="text-purple-400 font-semibold text-sm">
+                                {formatCurrency(metrics.incomeTypes['Investments'])}
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-gray-500/20 rounded-full flex items-center justify-center">
+                                    <Coins className="w-3 h-3 text-gray-400" />
+                                </div>
+                                <span className="text-gray-300 text-xs">Other</span>
+                            </div>
+                            <span className="text-gray-400 font-semibold text-sm">
+                                {formatCurrency(metrics.incomeTypes['Other'] + metrics.incomeTypes['Business'])}
+                            </span>
                         </div>
                     </div>
-                    <p className="text-sm text-gray-500 mt-2">
-                        Unique sources
-                    </p>
                 </div>
             </div>
 

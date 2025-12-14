@@ -315,8 +315,8 @@ const InsurancePolicyDetail = ({ policyId, onBack, onEdit }) => {
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
-                                    ? 'border-blue-600 text-blue-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700'
                                 }`}
                         >
                             {tab.label}
@@ -632,8 +632,8 @@ const InsurancePolicyDetail = ({ policyId, onBack, onEdit }) => {
                                         <div>
                                             <p className="font-medium text-gray-900">{getRiderLabel(rider.rider_name)}</p>
                                             <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs ${rider.status === 'active' ? 'bg-green-100 text-green-800' :
-                                                    rider.status === 'claimed' ? 'bg-blue-100 text-blue-800' :
-                                                        'bg-gray-100 text-gray-800'
+                                                rider.status === 'claimed' ? 'bg-blue-100 text-blue-800' :
+                                                    'bg-gray-100 text-gray-800'
                                                 }`}>
                                                 {rider.status}
                                             </span>

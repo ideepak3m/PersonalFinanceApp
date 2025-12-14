@@ -72,24 +72,52 @@ export const createInsurancePolicy = async (policyData) => {
 
     const { nominees, riders, ...policy } = policyData;
 
+    // List of valid policy columns
+    const validColumns = [
+        'insurer_name', 'policy_number', 'plan_name', 'plan_type', 'policy_holder_name',
+        'sum_assured', 'premium_amount', 'premium_frequency', 'currency',
+        'policy_start_date', 'maturity_date', 'premium_payment_term', 'policy_term',
+        'status', 'total_premiums_paid', 'accrued_bonus', 'terminal_bonus',
+        'current_fund_value', 'expected_maturity_value', 'surrender_value',
+        'purchase_price', 'annuity_amount', 'annuity_mode', 'annuity_type',
+        'annuity_start_date', 'deferment_period',
+        'premium_payment_mode', 'next_premium_due_date', 'last_premium_paid_date',
+        'policy_document_location', 'notes'
+    ];
+
+    // Build insert object with only valid columns
+    const insertData = { user_id: user.id };
+    for (const col of validColumns) {
+        if (col in policy) {
+            insertData[col] = policy[col];
+        }
+    }
+
     // Insert policy
     const { data: newPolicy, error: policyError } = await supabase
         .from('insurance_policies')
-        .insert([{ ...policy, user_id: user.id }])
+        .insert([insertData])
         .select()
         .single();
 
     if (policyError) {
         console.error('Error creating insurance policy:', policyError);
+        console.error('Insert data sent:', insertData);
         throw policyError;
     }
 
     // Insert nominees if provided
     if (nominees && nominees.length > 0) {
-        const nomineesWithPolicyId = nominees.map(n => ({
-            ...n,
-            policy_id: newPolicy.id
-        }));
+        const validNomineeColumns = ['nominee_name', 'relationship', 'percentage', 'date_of_birth', 'is_minor', 'guardian_name'];
+        const nomineesWithPolicyId = nominees.map(n => {
+            const nomineeData = { policy_id: newPolicy.id };
+            for (const col of validNomineeColumns) {
+                if (col in n && n[col] !== '' && n[col] !== undefined) {
+                    nomineeData[col] = n[col];
+                }
+            }
+            return nomineeData;
+        });
 
         const { error: nomineeError } = await supabase
             .from('insurance_nominees')
@@ -102,10 +130,16 @@ export const createInsurancePolicy = async (policyData) => {
 
     // Insert riders if provided
     if (riders && riders.length > 0) {
-        const ridersWithPolicyId = riders.map(r => ({
-            ...r,
-            policy_id: newPolicy.id
-        }));
+        const validRiderColumns = ['rider_name', 'rider_sum_assured', 'additional_premium', 'start_date', 'end_date', 'status'];
+        const ridersWithPolicyId = riders.map(r => {
+            const riderData = { policy_id: newPolicy.id };
+            for (const col of validRiderColumns) {
+                if (col in r && r[col] !== '' && r[col] !== undefined) {
+                    riderData[col] = r[col];
+                }
+            }
+            return riderData;
+        });
 
         const { error: riderError } = await supabase
             .from('insurance_riders')
@@ -123,17 +157,48 @@ export const createInsurancePolicy = async (policyData) => {
  * Update an existing insurance policy
  */
 export const updateInsurancePolicy = async (policyId, updates) => {
-    const { nominees, riders, premium_payments, bonus_history, ...policyUpdates } = updates;
+    // Extract only valid policy fields (exclude related data and system fields)
+    const {
+        nominees, riders, premium_payments, bonus_history,
+        id, user_id, created_at, updated_at,
+        ...policyUpdates
+    } = updates;
+
+    // Build update object with only defined values
+    const updateData = {
+        updated_at: new Date().toISOString()
+    };
+
+    // List of valid policy columns
+    const validColumns = [
+        'insurer_name', 'policy_number', 'plan_name', 'plan_type', 'policy_holder_name',
+        'sum_assured', 'premium_amount', 'premium_frequency', 'currency',
+        'policy_start_date', 'maturity_date', 'premium_payment_term', 'policy_term',
+        'status', 'total_premiums_paid', 'accrued_bonus', 'terminal_bonus',
+        'current_fund_value', 'expected_maturity_value', 'surrender_value',
+        'purchase_price', 'annuity_amount', 'annuity_mode', 'annuity_type',
+        'annuity_start_date', 'deferment_period',
+        'premium_payment_mode', 'next_premium_due_date', 'last_premium_paid_date',
+        'policy_document_location', 'notes'
+    ];
+
+    // Only include valid columns that are present in the updates
+    for (const col of validColumns) {
+        if (col in policyUpdates) {
+            updateData[col] = policyUpdates[col];
+        }
+    }
 
     const { data, error } = await supabase
         .from('insurance_policies')
-        .update({ ...policyUpdates, updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq('id', policyId)
         .select()
         .single();
 
     if (error) {
         console.error('Error updating insurance policy:', error);
+        console.error('Update data sent:', updateData);
         throw error;
     }
 

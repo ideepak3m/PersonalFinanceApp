@@ -35,6 +35,7 @@ const RealPDFParser = () => {
     const [manualAccountNumber, setManualAccountNumber] = useState('');
     const [manualInstitution, setManualInstitution] = useState('');
     const [manualAccountType, setManualAccountType] = useState('');
+    const [manualCountry, setManualCountry] = useState('');
 
     // Existing data from database
     const [existingData, setExistingData] = useState({
@@ -430,6 +431,7 @@ const RealPDFParser = () => {
                     setManualAccountNumber(account.account_number || '');
                     setManualInstitution(account.institution || '');
                     setManualAccountType(account.account_type || '');
+                    setManualCountry(account.country || '');
 
                     // Initialize reviewed holdings with existing data matched by security name
                     if (reviewedHoldings.length === 0 && holdingsTable.rows.length > 0) {
@@ -523,6 +525,10 @@ const RealPDFParser = () => {
             setError('Please select an Account Type');
             return;
         }
+        if (!manualCountry || !manualCountry.trim()) {
+            setError('Please select a Country');
+            return;
+        }
 
         setSavingToDB(true);
         setSaveSuccess(null);
@@ -535,6 +541,7 @@ const RealPDFParser = () => {
                 accountNumber: manualAccountNumber.trim(),
                 institution: manualInstitution.trim(),
                 accountType: manualAccountType.trim(),
+                country: manualCountry.trim() || null,
                 displayName: accountDisplayName.trim(),
                 managerId: selectedManagerId || null,
                 statementDate: new Date().toISOString().split('T')[0],
@@ -608,6 +615,7 @@ const RealPDFParser = () => {
                 setManualAccountNumber('');
                 setManualInstitution('');
                 setManualAccountType('');
+                setManualCountry('');
                 setReviewedHoldings([]);
                 setExistingData({ account: null, holdings: [], cashTransactions: [], investmentTransactions: [] });
                 // Reload accounts list
@@ -1128,8 +1136,30 @@ const RealPDFParser = () => {
                                         </div>
                                     </div>
 
-                                    {/* Row 2: Manager and Link */}
-                                    <div className="grid grid-cols-3 gap-4">
+                                    {/* Row 2: Country, Manager and Link */}
+                                    <div className="grid grid-cols-4 gap-4">
+                                        {/* Country */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Country *
+                                            </label>
+                                            <select
+                                                value={manualCountry}
+                                                onChange={(e) => setManualCountry(e.target.value)}
+                                                className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="">-- Select Country --</option>
+                                                <option value="Malaysia">Malaysia</option>
+                                                <option value="Singapore">Singapore</option>
+                                                <option value="USA">USA</option>
+                                                <option value="Canada">Canada</option>
+                                                <option value="Australia">Australia</option>
+                                                <option value="UK">UK</option>
+                                                <option value="India">India</option>
+                                                <option value="Hong Kong">Hong Kong</option>
+                                            </select>
+                                        </div>
+
                                         {/* Managed By */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1175,6 +1205,7 @@ const RealPDFParser = () => {
                                                         setManualAccountNumber(account.account_number || '');
                                                         setManualInstitution(account.institution || '');
                                                         setManualAccountType(account.account_type || '');
+                                                        setManualCountry(account.country || '');
                                                         if (account.manager_id) {
                                                             setSelectedManagerId(account.manager_id);
                                                         }

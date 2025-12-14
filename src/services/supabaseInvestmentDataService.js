@@ -97,6 +97,7 @@ export const saveAccountInfo = async (accountInfo) => {
             account_type: accountInfo.accountType,
             institution: accountInfo.institution,
             currency: accountInfo.currency || 'CAD',
+            country: accountInfo.country || null,
             opening_balance: parseFloat(accountInfo.openingBalance) || null,
             closing_balance: parseFloat(accountInfo.closingBalance) || null,
             statement_date: accountInfo.statementDate || null,

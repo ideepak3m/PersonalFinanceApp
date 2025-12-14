@@ -14,8 +14,10 @@ import {
     Wallet,
     Building2,
     ArrowUpRight,
-    ArrowDownRight
+    ArrowDownRight,
+    Globe
 } from 'lucide-react';
+import { getBaseCountry } from '../../services/settingsService';
 
 export const InvestmentGrowth = () => {
     const [loading, setLoading] = useState(true);
@@ -23,10 +25,24 @@ export const InvestmentGrowth = () => {
     const [holdings, setHoldings] = useState([]);
     const [accounts, setAccounts] = useState([]);
     const [selectedAccountType, setSelectedAccountType] = useState('all');
+    const [selectedCountry, setSelectedCountry] = useState(null);
+    const [availableCountries, setAvailableCountries] = useState([]);
 
     useEffect(() => {
         loadData();
     }, []);
+
+    // Initialize country selection from base country setting
+    useEffect(() => {
+        if (availableCountries.length > 0 && selectedCountry === null) {
+            const baseCountry = getBaseCountry();
+            if (baseCountry && availableCountries.includes(baseCountry)) {
+                setSelectedCountry(baseCountry);
+            } else if (availableCountries.length > 0) {
+                setSelectedCountry(availableCountries[0]);
+            }
+        }
+    }, [availableCountries, selectedCountry]);
 
     const loadData = async () => {
         setLoading(true);
@@ -36,6 +52,10 @@ export const InvestmentGrowth = () => {
             // Load accounts
             const accts = await investmentAccountsDB.getAll();
             setAccounts(accts || []);
+
+            // Extract unique countries from accounts
+            const countries = [...new Set((accts || []).map(a => a.country).filter(Boolean))];
+            setAvailableCountries(countries);
 
             // Create accounts lookup map using supabase_id (original UUID) as the key
             // This is needed because holdings foreign keys reference original Supabase UUIDs
@@ -76,8 +96,15 @@ export const InvestmentGrowth = () => {
     const metrics = useMemo(() => {
         let filteredHoldings = holdings;
 
+        // Filter by country first
+        if (selectedCountry) {
+            filteredHoldings = filteredHoldings.filter(h =>
+                h.investment_accounts?.country === selectedCountry
+            );
+        }
+
         if (selectedAccountType !== 'all') {
-            filteredHoldings = holdings.filter(h =>
+            filteredHoldings = filteredHoldings.filter(h =>
                 h.investment_accounts?.account_type === selectedAccountType
             );
         }
@@ -176,7 +203,7 @@ export const InvestmentGrowth = () => {
             topHoldings,
             holdingCount: filteredHoldings.length
         };
-    }, [holdings, selectedAccountType]);
+    }, [holdings, selectedAccountType, selectedCountry]);
 
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('en-CA', {
@@ -234,19 +261,39 @@ export const InvestmentGrowth = () => {
                 </div>
 
                 {/* Filter */}
-                <div className="flex items-center gap-3">
-                    <label className="text-sm text-gray-400">Account Type:</label>
-                    <select
-                        value={selectedAccountType}
-                        onChange={(e) => setSelectedAccountType(e.target.value)}
-                        className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
-                    >
-                        {accountTypeOptions.map(type => (
-                            <option key={type} value={type}>
-                                {type === 'all' ? 'All Accounts' : type}
-                            </option>
-                        ))}
-                    </select>
+                <div className="flex items-center gap-6">
+                    {/* Country Filter */}
+                    <div className="flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-gray-400" />
+                        <label className="text-sm text-gray-400">Country:</label>
+                        <select
+                            value={selectedCountry || ''}
+                            onChange={(e) => setSelectedCountry(e.target.value)}
+                            className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                        >
+                            {availableCountries.map(country => (
+                                <option key={country} value={country}>
+                                    {country}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Account Type Filter */}
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-400">Account Type:</label>
+                        <select
+                            value={selectedAccountType}
+                            onChange={(e) => setSelectedAccountType(e.target.value)}
+                            className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
+                        >
+                            {accountTypeOptions.map(type => (
+                                <option key={type} value={type}>
+                                    {type === 'all' ? 'All Accounts' : type}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
             </div>
 

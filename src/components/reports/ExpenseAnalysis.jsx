@@ -5,12 +5,12 @@ import {
     chartOfAccountsDB,
     accountsDB
 } from '../../services/database';
+import { getBaseCountry } from '../../services/settingsService';
 import {
     PieChart,
     BarChart3,
     TrendingDown,
     Calendar,
-    DollarSign,
     Loader,
     AlertCircle,
     Filter,
@@ -20,7 +20,9 @@ import {
     X,
     Edit2,
     Check,
-    XCircle
+    XCircle,
+    Home,
+    ShoppingCart
 } from 'lucide-react';
 
 const MONTHS = [
@@ -35,7 +37,7 @@ export const ExpenseAnalysis = () => {
     const [categories, setCategories] = useState([]);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedMonth, setSelectedMonth] = useState(null); // null = all months
-    const [selectedCountry, setSelectedCountry] = useState('all'); // 'all' or country code
+    const [selectedCountry, setSelectedCountry] = useState(null); // null until initialized, then country code
     const [accounts, setAccounts] = useState([]); // Bank/credit card accounts
     const [availableCountries, setAvailableCountries] = useState([]); // Countries from accounts
     const [viewMode, setViewMode] = useState('category'); // 'category' | 'monthly' | 'yoy'
@@ -43,10 +45,35 @@ export const ExpenseAnalysis = () => {
     const [chartOfAccounts, setChartOfAccounts] = useState([]); // For COA dropdown
     const [editingTxnId, setEditingTxnId] = useState(null); // Transaction being edited
     const [editingCoaId, setEditingCoaId] = useState(null); // Selected COA for edit
+    const [initialized, setInitialized] = useState(false);
+
+    // Initialize with base country from settings
+    useEffect(() => {
+        const initCountry = async () => {
+            const accts = await accountsDB.getAll();
+            const countries = [...new Set((accts || []).map(a => a.country).filter(Boolean))].sort();
+            setAvailableCountries(countries);
+            setAccounts(accts || []);
+
+            // Get base country from settings, fallback to first available
+            const baseCountry = getBaseCountry();
+            if (baseCountry && countries.includes(baseCountry)) {
+                setSelectedCountry(baseCountry);
+            } else if (countries.length > 0) {
+                setSelectedCountry(countries[0]);
+            } else {
+                setSelectedCountry('all');
+            }
+            setInitialized(true);
+        };
+        initCountry();
+    }, []);
 
     useEffect(() => {
-        loadData();
-    }, [selectedYear, selectedCountry]);
+        if (initialized) {
+            loadData();
+        }
+    }, [selectedYear, selectedCountry, initialized]);
 
     const loadData = async () => {
         setLoading(true);
@@ -55,21 +82,11 @@ export const ExpenseAnalysis = () => {
         try {
             console.log('ExpenseAnalysis: Starting to load data...');
 
-            // Load accounts to get countries
-            const accts = await accountsDB.getAll();
-            console.log('ExpenseAnalysis: Accounts loaded:', accts?.length);
-            setAccounts(accts || []);
-
-            // Extract unique countries from accounts
-            const countries = [...new Set((accts || []).map(a => a.country).filter(Boolean))].sort();
-            console.log('ExpenseAnalysis: Available countries:', countries);
-            setAvailableCountries(countries);
-
             // Get account IDs for selected country (for filtering transactions)
             let countryAccountIds = null;
-            if (selectedCountry !== 'all') {
+            if (selectedCountry && selectedCountry !== 'all') {
                 countryAccountIds = new Set(
-                    (accts || [])
+                    accounts
                         .filter(a => a.country === selectedCountry)
                         .map(a => a.id)
                 );
@@ -265,13 +282,28 @@ export const ExpenseAnalysis = () => {
             .sort((a, b) => b.amount - a.amount)
             .slice(0, 10);
 
+        // Mortgage vs Non-Mortgage breakdown
+        let mortgageExpenses = 0;
+        let nonMortgageExpenses = 0;
+        filteredTxns.forEach(t => {
+            const coaName = (t.chart_of_account?.name || '').toLowerCase();
+            const amount = Math.abs(parseFloat(t.amount) || 0);
+            if (coaName.includes('mortgage')) {
+                mortgageExpenses += amount;
+            } else {
+                nonMortgageExpenses += amount;
+            }
+        });
+
         return {
             totalExpenses,
             avgMonthly,
             byCategory: sortedCategories,
             byMonth,
             topMerchants,
-            transactionCount: filteredTxns.length
+            transactionCount: filteredTxns.length,
+            mortgageExpenses,
+            nonMortgageExpenses
         };
     }, [transactions, selectedMonth]);
 
@@ -337,11 +369,10 @@ export const ExpenseAnalysis = () => {
                 <div className="flex items-center gap-3 flex-wrap">
                     {/* Country Filter */}
                     <select
-                        value={selectedCountry}
+                        value={selectedCountry || ''}
                         onChange={(e) => setSelectedCountry(e.target.value)}
                         className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-indigo-500"
                     >
-                        <option value="all">All Countries</option>
                         {availableCountries.map(country => (
                             <option key={country} value={country}>{country}</option>
                         ))}
@@ -386,7 +417,7 @@ export const ExpenseAnalysis = () => {
                             </p>
                         </div>
                         <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
-                            <DollarSign className="w-6 h-6 text-red-400" />
+                            <TrendingDown className="w-6 h-6 text-red-400" />
                         </div>
                     </div>
                     <p className="text-sm text-gray-500 mt-2">
@@ -412,20 +443,31 @@ export const ExpenseAnalysis = () => {
                 </div>
 
                 <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-gray-400 text-sm">Transactions</p>
-                            <p className="text-2xl font-bold text-blue-400 mt-1">
-                                {metrics.transactionCount}
-                            </p>
+                    <p className="text-gray-400 text-sm mb-3">Expense Breakdown</p>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
+                                    <Home className="w-4 h-4 text-blue-400" />
+                                </div>
+                                <span className="text-gray-300 text-sm">Mortgage</span>
+                            </div>
+                            <span className="text-blue-400 font-semibold">
+                                {formatCurrency(metrics.mortgageExpenses)}
+                            </span>
                         </div>
-                        <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center">
-                            <BarChart3 className="w-6 h-6 text-blue-400" />
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center">
+                                    <ShoppingCart className="w-4 h-4 text-orange-400" />
+                                </div>
+                                <span className="text-gray-300 text-sm">Non-Mortgage</span>
+                            </div>
+                            <span className="text-orange-400 font-semibold">
+                                {formatCurrency(metrics.nonMortgageExpenses)}
+                            </span>
                         </div>
                     </div>
-                    <p className="text-sm text-gray-500 mt-2">
-                        Expense transactions
-                    </p>
                 </div>
             </div>
 

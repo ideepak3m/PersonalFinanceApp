@@ -23,6 +23,10 @@ const Insurance = () => {
     const [selectedPolicy, setSelectedPolicy] = useState(null);
     const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'table'
 
+    // Sorting
+    const [sortColumn, setSortColumn] = useState('next_premium_due_date');
+    const [sortDirection, setSortDirection] = useState('asc');
+
     // Filters
     const [filters, setFilters] = useState({
         status: '',
@@ -135,6 +139,128 @@ const Insurance = () => {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         return diffDays;
     };
+
+    // Calculate FINAL premium due date (last payment that completes the premium payment term)
+    const getLastPremiumDueDate = (policy) => {
+        if (!policy.policy_start_date || !policy.premium_frequency) return null;
+        if (policy.premium_frequency === 'single') return policy.policy_start_date;
+        if (!policy.premium_payment_term) return null; // Need payment term to calculate
+
+        const startDate = new Date(policy.policy_start_date);
+
+        // Get months between payments based on frequency
+        const frequencyMonths = {
+            monthly: 1,
+            quarterly: 3,
+            half_yearly: 6,
+            annual: 12
+        };
+
+        const monthsInterval = frequencyMonths[policy.premium_frequency] || 12;
+
+        // Calculate total number of premiums in the payment term
+        const totalMonths = policy.premium_payment_term * 12;
+        const totalPremiums = Math.floor(totalMonths / monthsInterval);
+
+        // The last premium is at (totalPremiums - 1) intervals from start
+        // Because first premium is at start date (interval 0)
+        const lastPremiumDate = new Date(startDate);
+        lastPremiumDate.setMonth(lastPremiumDate.getMonth() + (totalPremiums - 1) * monthsInterval);
+
+        return lastPremiumDate.toISOString().split('T')[0];
+    };
+
+    // Calculate total premiums count based on payment term
+    const getTotalPremiumsCount = (policy) => {
+        if (!policy.policy_start_date || !policy.premium_frequency) return '-';
+        if (policy.premium_frequency === 'single') return '1';
+        if (!policy.premium_payment_term) return '-';
+
+        const frequencyMonths = {
+            monthly: 1,
+            quarterly: 3,
+            half_yearly: 6,
+            annual: 12
+        };
+
+        const monthsInterval = frequencyMonths[policy.premium_frequency] || 12;
+        const totalMonths = policy.premium_payment_term * 12;
+        const totalPremiums = Math.floor(totalMonths / monthsInterval);
+
+        return totalPremiums;
+    };
+
+    // Handle column sorting
+    const handleSort = (column) => {
+        if (sortColumn === column) {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortColumn(column);
+            setSortDirection('asc');
+        }
+    };
+
+    // Get sorted policies
+    const getSortedPolicies = () => {
+        return [...policies].sort((a, b) => {
+            let aValue, bValue;
+
+            switch (sortColumn) {
+                case 'insurer_name':
+                    aValue = a.insurer_name?.toLowerCase() || '';
+                    bValue = b.insurer_name?.toLowerCase() || '';
+                    break;
+                case 'plan_type':
+                    aValue = a.plan_type?.toLowerCase() || '';
+                    bValue = b.plan_type?.toLowerCase() || '';
+                    break;
+                case 'sum_assured':
+                    aValue = parseFloat(a.sum_assured) || 0;
+                    bValue = parseFloat(b.sum_assured) || 0;
+                    break;
+                case 'premium_amount':
+                    aValue = parseFloat(a.premium_amount) || 0;
+                    bValue = parseFloat(b.premium_amount) || 0;
+                    break;
+                case 'next_premium_due_date':
+                    aValue = a.next_premium_due_date ? new Date(a.next_premium_due_date) : new Date('9999-12-31');
+                    bValue = b.next_premium_due_date ? new Date(b.next_premium_due_date) : new Date('9999-12-31');
+                    break;
+                case 'final_payment':
+                    aValue = getLastPremiumDueDate(a) ? new Date(getLastPremiumDueDate(a)) : new Date('9999-12-31');
+                    bValue = getLastPremiumDueDate(b) ? new Date(getLastPremiumDueDate(b)) : new Date('9999-12-31');
+                    break;
+                case 'status':
+                    aValue = a.status?.toLowerCase() || '';
+                    bValue = b.status?.toLowerCase() || '';
+                    break;
+                default:
+                    aValue = a[sortColumn] || '';
+                    bValue = b[sortColumn] || '';
+            }
+
+            if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+            if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+    };
+
+    // Sortable header component
+    const SortableHeader = ({ column, label, align = 'left' }) => (
+        <th
+            className={`px-4 py-3 text-${align} text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none`}
+            onClick={() => handleSort(column)}
+        >
+            <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
+                {label}
+                <span className="text-gray-400">
+                    {sortColumn === column ? (
+                        sortDirection === 'asc' ? '▲' : '▼'
+                    ) : '⇅'}
+                </span>
+            </div>
+        </th>
+    );
 
     if (loading && policies.length === 0) {
         return (
@@ -388,22 +514,23 @@ const Insurance = () => {
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Policy</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Sum Assured</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Premium</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Next Due</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    <SortableHeader column="insurer_name" label="Policy" />
+                                    <SortableHeader column="plan_type" label="Type" />
+                                    <SortableHeader column="sum_assured" label="Sum Assured" align="right" />
+                                    <SortableHeader column="premium_amount" label="Premium" align="right" />
+                                    <SortableHeader column="next_premium_due_date" label="Next Due" />
+                                    <SortableHeader column="final_payment" label="Final Payment" />
+                                    <SortableHeader column="status" label="Status" />
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {policies.map(policy => {
+                                {getSortedPolicies().map((policy, index) => {
                                     const daysUntilDue = getDaysUntilDue(policy.next_premium_due_date);
                                     const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
 
                                     return (
-                                        <tr key={policy.id} className="hover:bg-gray-50">
+                                        <tr key={policy.id} className={`hover:bg-blue-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                                             <td className="px-4 py-3">
                                                 <div>
                                                     <p className="font-medium text-gray-900">{policy.insurer_name}</p>
@@ -429,6 +556,10 @@ const Insurance = () => {
                                                         {formatDate(policy.next_premium_due_date)}
                                                     </span>
                                                 ) : '-'}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <p>{formatDate(getLastPremiumDueDate(policy))}</p>
+                                                <p className="text-xs text-gray-500">{getTotalPremiumsCount(policy)} premiums</p>
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(policy.status)}`}>

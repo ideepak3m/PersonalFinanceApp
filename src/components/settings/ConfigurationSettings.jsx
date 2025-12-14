@@ -1,14 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { Save } from 'lucide-react';
-import { settingsDB } from '../../services/database';
+import { getConfiguration, setConfiguration } from '../../services/settingsService';
+import { accountsDB } from '../../services/database';
 
 const DEFAULT_CONFIG = {
     appName: 'Personal Finance',
     currency: 'USD',
     dateFormat: 'MM/DD/YYYY',
     fiscalYearStart: 'january',
-    defaultCountry: 'canada',
+    baseCountry: '',
     enableNotifications: true,
     enableAI: true,
     theme: 'light'
@@ -18,21 +19,33 @@ export const ConfigurationSettings = () => {
     const [config, setConfig] = useState(DEFAULT_CONFIG);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [availableCountries, setAvailableCountries] = useState([]);
 
     useEffect(() => {
-        const fetchConfig = async () => {
+        const fetchData = async () => {
             setLoading(true);
             try {
-                const data = await settingsDB.getConfiguration();
+                // Load configuration
+                const data = getConfiguration();
                 if (data) {
                     setConfig(data);
                 }
+
+                // Load countries from accounts
+                const accounts = await accountsDB.getAll();
+                const countries = [...new Set((accounts || []).map(a => a.country).filter(Boolean))].sort();
+                setAvailableCountries(countries);
+
+                // If no base country is set and we have countries, set the first one
+                if (!data?.baseCountry && countries.length > 0) {
+                    setConfig(prev => ({ ...prev, baseCountry: countries[0] }));
+                }
             } catch (e) {
-                // fallback to default
+                console.error('Error loading configuration:', e);
             }
             setLoading(false);
         };
-        fetchConfig();
+        fetchData();
     }, []);
 
     const handleChange = (field, value) => {
@@ -45,7 +58,7 @@ export const ConfigurationSettings = () => {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await settingsDB.setConfiguration(config);
+            setConfiguration(config);
             alert('Configuration saved successfully!');
         } catch (e) {
             alert('Failed to save configuration.');
@@ -133,19 +146,27 @@ export const ConfigurationSettings = () => {
                     </select>
                 </div>
 
-                {/* Default Country */}
+                {/* Base Country for Reports */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Default Country
+                        Base Country (for Reports)
                     </label>
                     <select
-                        value={config.defaultCountry}
-                        onChange={(e) => handleChange('defaultCountry', e.target.value)}
+                        value={config.baseCountry}
+                        onChange={(e) => handleChange('baseCountry', e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                        <option value="canada">Canada</option>
-                        <option value="india">India</option>
+                        {availableCountries.length === 0 ? (
+                            <option value="">No countries found - add accounts first</option>
+                        ) : (
+                            availableCountries.map(country => (
+                                <option key={country} value={country}>{country}</option>
+                            ))
+                        )}
                     </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                        This country will be used as default in Income and Expense reports
+                    </p>
                 </div>
 
                 {/* Toggles */}

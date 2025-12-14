@@ -138,12 +138,12 @@ const InsurancePolicyForm = ({ policy, onClose }) => {
         if (!formData.policy_number) newErrors.policy_number = 'Policy number is required';
         if (!formData.plan_type) newErrors.plan_type = 'Plan type is required';
         if (!formData.policy_holder_name) newErrors.policy_holder_name = 'Policy holder name is required';
-        
+
         // Sum assured validation - not required for annuity plans
         if (!isAnnuity && (!formData.sum_assured || parseFloat(formData.sum_assured) < 0)) {
             newErrors.sum_assured = 'Valid sum assured is required';
         }
-        
+
         // For annuity plans, require purchase price and annuity amount
         if (isAnnuity) {
             if (!formData.purchase_price || parseFloat(formData.purchase_price) <= 0) {
@@ -158,7 +158,7 @@ const InsurancePolicyForm = ({ policy, onClose }) => {
                 newErrors.premium_amount = 'Valid premium amount is required';
             }
         }
-        
+
         if (!formData.policy_start_date) newErrors.policy_start_date = 'Policy start date is required';
 
         // Validate nominees total percentage
