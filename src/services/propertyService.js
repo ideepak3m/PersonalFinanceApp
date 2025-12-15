@@ -252,9 +252,6 @@ export async function getPropertyInvestmentSummary(propertyId) {
         const allMortgages = await mortgagesDB.getAll();
         const mortgages = allMortgages.filter(m => m.property_id === propertyId);
 
-        // Get rental income (simplified - based on transaction search)
-        const rentalResult = await getRentalIncomeForProperty(propertyId);
-
         const totalMortgageBalance = mortgages
             .filter(m => m.is_active)
             .reduce((sum, m) => sum + (m.current_balance || 0), 0);
@@ -269,7 +266,8 @@ export async function getPropertyInvestmentSummary(propertyId) {
             (property.legal_fees || 0) +
             (property.other_closing_costs || 0);
 
-        const annualRentalIncome = rentalResult.success ? rentalResult.totalRentalIncome : 0;
+        // Use expected monthly rent to calculate annual rental income
+        const annualRentalIncome = (property.expected_monthly_rent || 0) * 12;
 
         // Gross Rental Yield
         const grossRentalYield = marketValue > 0

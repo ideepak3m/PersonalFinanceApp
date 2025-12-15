@@ -1,6 +1,7 @@
 // src/pages/InvestmentAccountsDashboard.jsx
 import React, { useEffect, useState } from 'react';
-import { Search, TrendingUp, Calendar, Building2, ChevronRight, RefreshCw, Edit2, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, TrendingUp, Calendar, Building2, ChevronRight, RefreshCw, Edit2, X, Upload } from 'lucide-react';
 import {
     getInvestmentAccounts,
     getLastTransactionDates,
@@ -12,6 +13,7 @@ import {
 import InvestmentAccountDetailsModal from '../components/investments/InvestmentAccountDetailsModal';
 
 export const InvestmentAccountsDashboard = () => {
+    const navigate = useNavigate();
     const [accounts, setAccounts] = useState([]);
     const [managers, setManagers] = useState([]);
     const [lastTransactionDates, setLastTransactionDates] = useState({});
@@ -183,6 +185,13 @@ export const InvestmentAccountsDashboard = () => {
                     >
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                         Refresh
+                    </button>
+                    <button
+                        onClick={() => navigate('/pdf-reader')}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+                    >
+                        <Upload className="w-4 h-4" />
+                        Import Statement
                     </button>
                 </div>
             </div>

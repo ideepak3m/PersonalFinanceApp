@@ -30,7 +30,6 @@ import {
     addMortgageWithTerm,
     addMortgageTerm,
     getPropertyInvestmentSummary,
-    getRentalIncomeForProperty,
     linkTransactionToProperty
 } from '../services/propertyService';
 import { mortgagesDB, mortgageTermsDB } from '../services/database';
@@ -74,7 +73,6 @@ export const PropertyDetails = () => {
     const [property, setProperty] = useState(null);
     const [mortgages, setMortgages] = useState([]);
     const [investmentSummary, setInvestmentSummary] = useState(null);
-    const [rentalIncome, setRentalIncome] = useState(null);
     const [loading, setLoading] = useState(true);
 
     // Modal states
@@ -137,11 +135,10 @@ export const PropertyDetails = () => {
     const loadPropertyData = async () => {
         setLoading(true);
         try {
-            const [propertyResult, mortgagesResult, summaryResult, rentalResult] = await Promise.all([
+            const [propertyResult, mortgagesResult, summaryResult] = await Promise.all([
                 getPropertyById(propertyId),
                 getMortgagesForProperty(propertyId),
-                getPropertyInvestmentSummary(propertyId),
-                getRentalIncomeForProperty(propertyId)
+                getPropertyInvestmentSummary(propertyId)
             ]);
 
             if (propertyResult.success) {
@@ -152,9 +149,6 @@ export const PropertyDetails = () => {
             }
             if (summaryResult.success) {
                 setInvestmentSummary(summaryResult.summary);
-            }
-            if (rentalResult.success) {
-                setRentalIncome(rentalResult);
             }
         } catch (error) {
             console.error('Error loading property data:', error);
@@ -431,15 +425,15 @@ export const PropertyDetails = () => {
                     </div>
                 </div>
 
-                {!property.is_primary_residence && rentalIncome && (
+                {!property.is_primary_residence && property.expected_monthly_rent > 0 && (
                     <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-purple-500/20 rounded-lg">
                                 <DollarSign className="w-5 h-5 text-purple-400" />
                             </div>
                             <div>
-                                <p className="text-gray-400 text-sm">Rental Income</p>
-                                <p className="text-xl font-semibold text-purple-400">{formatCurrency(rentalIncome.totalRentalIncome)}</p>
+                                <p className="text-gray-400 text-sm">Annual Rental Income</p>
+                                <p className="text-xl font-semibold text-purple-400">{formatCurrency((property.expected_monthly_rent || 0) * 12)}</p>
                             </div>
                         </div>
                     </div>
@@ -492,6 +486,10 @@ export const PropertyDetails = () => {
                             <div className="flex justify-between">
                                 <span className="text-gray-400">Annual Property Tax</span>
                                 <span className="text-white">{formatCurrency(property.property_tax_annual)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-400">Annual Property Insurance</span>
+                                <span className="text-white">{formatCurrency(property.property_insurance_annual || 0)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-400">Monthly HOA Fees</span>
@@ -630,7 +628,9 @@ export const PropertyDetails = () => {
                                         </div>
                                         <div>
                                             <p className="text-gray-500 text-xs">Amortization</p>
-                                            <p className="text-white">{mortgage.original_amortization_years} years</p>
+                                            <p className="text-white">
+                                                {mortgage.mortgage_type === 'heloc' ? 'N/A' : `${mortgage.original_amortization_years} years`}
+                                            </p>
                                         </div>
                                         <div>
                                             <p className="text-gray-500 text-xs">Start Date</p>
@@ -641,29 +641,45 @@ export const PropertyDetails = () => {
                                     {/* Current Term Info */}
                                     {mortgage.currentTerm && (
                                         <div className="bg-gray-700/50 rounded-lg p-4 mb-4">
-                                            <h5 className="text-sm font-medium text-gray-300 mb-3">Current Term</h5>
+                                            <h5 className="text-sm font-medium text-gray-300 mb-3">
+                                                {mortgage.mortgage_type === 'heloc' ? 'Current Details' : 'Current Term'}
+                                            </h5>
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                 <div>
                                                     <p className="text-gray-500 text-xs">Lender</p>
                                                     <p className="text-white text-sm">{mortgage.currentTerm.lender}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-gray-500 text-xs">Interest Rate</p>
-                                                    <p className="text-white text-sm">{formatPercent(mortgage.currentTerm.interest_rate)}</p>
+                                                    <p className="text-gray-500 text-xs">
+                                                        {mortgage.mortgage_type === 'heloc' ? 'Rate' : 'Interest Rate'}
+                                                    </p>
+                                                    <p className="text-white text-sm">
+                                                        {mortgage.mortgage_type === 'heloc'
+                                                            ? `Prime ${mortgage.currentTerm.prime_rate_offset >= 0 ? '+' : ''}${mortgage.currentTerm.prime_rate_offset || 0}%`
+                                                            : formatPercent(mortgage.currentTerm.interest_rate)
+                                                        }
+                                                    </p>
                                                 </div>
                                                 <div>
                                                     <p className="text-gray-500 text-xs">Payment</p>
                                                     <p className="text-white text-sm">{formatCurrency(mortgage.currentTerm.regular_payment_amount)}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-gray-500 text-xs">Term Ends</p>
-                                                    <p className="text-white text-sm">{formatDate(mortgage.currentTerm.term_end_date)}</p>
+                                                    <p className="text-gray-500 text-xs">
+                                                        {mortgage.mortgage_type === 'heloc' ? 'Type' : 'Term Ends'}
+                                                    </p>
+                                                    <p className="text-white text-sm">
+                                                        {mortgage.mortgage_type === 'heloc'
+                                                            ? 'Revolving Credit'
+                                                            : formatDate(mortgage.currentTerm.term_end_date)
+                                                        }
+                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
                                     )}
 
-                                    {mortgage.is_active && (
+                                    {mortgage.is_active && mortgage.mortgage_type !== 'heloc' && (
                                         <button
                                             onClick={() => handleAddRenewal(mortgage)}
                                             className="flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300"
@@ -695,69 +711,106 @@ export const PropertyDetails = () => {
                         <>
                             {/* Summary */}
                             <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                    <div>
-                                        <p className="text-gray-400 text-sm">Expected Monthly Rent</p>
-                                        <p className="text-2xl font-semibold text-purple-400">
-                                            {formatCurrency(property.expected_monthly_rent || 0)}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-gray-400 text-sm">Annual Rental Income</p>
-                                        <p className="text-xl font-semibold text-white">
-                                            {formatCurrency((property.expected_monthly_rent || 0) * 12)}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-gray-400 text-sm">Gross Yield</p>
-                                        <p className="text-xl font-semibold text-green-400">
-                                            {marketValue > 0
-                                                ? ((property.expected_monthly_rent || 0) * 12 / marketValue * 100).toFixed(2)
-                                                : '0.00'
-                                            }%
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-gray-400 text-sm">Net Monthly (Est.)</p>
-                                        <p className="text-xl font-semibold text-green-400">
-                                            {formatCurrency(
-                                                (property.expected_monthly_rent || 0) -
-                                                (property.hoa_monthly || 0) -
-                                                ((property.property_tax_annual || 0) / 12)
-                                            )}
-                                        </p>
-                                        <p className="text-gray-500 text-xs mt-1">After HOA & taxes</p>
-                                    </div>
-                                </div>
-                            </div>
+                                {(() => {
+                                    // Calculate annual mortgage payment from current terms
+                                    const annualMortgagePayment = mortgages
+                                        .filter(m => m.is_active && m.currentTerm)
+                                        .reduce((sum, m) => {
+                                            const payment = m.currentTerm?.regular_payment_amount || 0;
+                                            const frequency = m.currentTerm?.payment_frequency || 'monthly';
+                                            // Convert to annual based on frequency
+                                            const multiplier = {
+                                                'monthly': 12,
+                                                'bi_weekly': 26,
+                                                'accelerated_bi_weekly': 26,
+                                                'weekly': 52,
+                                                'accelerated_weekly': 52,
+                                                'semi_monthly': 24
+                                            }[frequency] || 12;
+                                            return sum + (payment * multiplier);
+                                        }, 0);
 
-                            {/* Detected Transactions */}
-                            {rentalIncome?.transactions?.length > 0 && (
-                                <div className="bg-gray-800 rounded-xl border border-gray-700">
-                                    <div className="px-4 py-3 border-b border-gray-700">
-                                        <h4 className="font-medium text-white">Detected Rental Transactions</h4>
-                                        <p className="text-gray-500 text-sm">Transactions matching rental keywords or property name</p>
-                                    </div>
-                                    <div className="divide-y divide-gray-700">
-                                        {rentalIncome.transactions.slice(0, 10).map(txn => (
-                                            <div key={txn.id} className="px-4 py-3 flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-white text-sm">{txn.description}</p>
-                                                    <p className="text-gray-500 text-xs">{formatDate(txn.transaction_date)}</p>
-                                                </div>
-                                                <p className="text-green-400 font-medium">{formatCurrency(txn.amount)}</p>
+                                    const monthlyMortgagePayment = annualMortgagePayment / 12;
+
+                                    // Total Carrying Cost = Mortgage + HOA + Property Tax + Insurance
+                                    const annualCarryingCost = annualMortgagePayment +
+                                        ((property.hoa_monthly || 0) * 12) +
+                                        (property.property_tax_annual || 0) +
+                                        (property.property_insurance_annual || 0);
+
+                                    const monthlyCarryingCost = annualCarryingCost / 12;
+
+                                    // Net income calculations
+                                    const monthlyNetIncome = (property.expected_monthly_rent || 0) - monthlyCarryingCost;
+                                    const annualNetIncome = monthlyNetIncome * 12;
+
+                                    return (
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                                            <div>
+                                                <p className="text-gray-400 text-sm">Expected Monthly Rent</p>
+                                                <p className="text-2xl font-semibold text-purple-400">
+                                                    {formatCurrency(property.expected_monthly_rent || 0)}
+                                                </p>
                                             </div>
-                                        ))}
-                                    </div>
-                                    {rentalIncome.transactions.length > 10 && (
-                                        <div className="px-4 py-3 text-center border-t border-gray-700">
-                                            <p className="text-gray-500 text-sm">
-                                                +{rentalIncome.transactions.length - 10} more transactions
-                                            </p>
+                                            <div>
+                                                <p className="text-gray-400 text-sm">Annual Rental Income</p>
+                                                <p className="text-xl font-semibold text-white">
+                                                    {formatCurrency((property.expected_monthly_rent || 0) * 12)}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-400 text-sm">Annual Mortgage Payment</p>
+                                                <p className="text-xl font-semibold text-red-400">
+                                                    {formatCurrency(annualMortgagePayment)}
+                                                </p>
+                                                <p className="text-gray-500 text-xs mt-1">
+                                                    {formatCurrency(monthlyMortgagePayment)}/mo
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-400 text-sm">Total Carrying Cost</p>
+                                                <p className="text-xl font-semibold text-orange-400">
+                                                    {formatCurrency(annualCarryingCost)}
+                                                </p>
+                                                <p className="text-gray-500 text-xs mt-1">
+                                                    {formatCurrency(monthlyCarryingCost)}/mo (Mtg+HOA+Tax+Ins)
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-400 text-sm">Gross Yield</p>
+                                                <p className="text-xl font-semibold text-green-400">
+                                                    {marketValue > 0
+                                                        ? ((property.expected_monthly_rent || 0) * 12 / marketValue * 100).toFixed(2)
+                                                        : '0.00'
+                                                    }%
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-400 text-sm">Net Monthly (Est.)</p>
+                                                <p className={`text-xl font-semibold ${monthlyNetIncome >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                    {formatCurrency(monthlyNetIncome)}
+                                                </p>
+                                                <p className="text-gray-500 text-xs mt-1">After all expenses</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-400 text-sm">Annual Net Income</p>
+                                                <p className={`text-xl font-semibold ${annualNetIncome >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                    {formatCurrency(annualNetIncome)}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-400 text-sm">Net Yield</p>
+                                                <p className={`text-xl font-semibold ${annualNetIncome >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                    {marketValue > 0
+                                                        ? (annualNetIncome / marketValue * 100).toFixed(2)
+                                                        : '0.00'
+                                                    }%
+                                                </p>
+                                            </div>
                                         </div>
-                                    )}
-                                </div>
-                            )}
+                                    );
+                                })()}
+                            </div>
                         </>
                     )}
                 </div>
@@ -824,9 +877,11 @@ export const PropertyDetails = () => {
                                         <label className="block text-sm text-gray-400 mb-1">Amortization (years)</label>
                                         <input
                                             type="number"
-                                            value={mortgageForm.original_amortization_years}
+                                            value={mortgageForm.mortgage_type === 'heloc' ? '' : mortgageForm.original_amortization_years}
                                             onChange={e => setMortgageForm(p => ({ ...p, original_amortization_years: e.target.value }))}
-                                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                            className={`w-full border border-gray-600 rounded-lg px-3 py-2 ${mortgageForm.mortgage_type === 'heloc' ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 text-white'}`}
+                                            disabled={mortgageForm.mortgage_type === 'heloc'}
+                                            placeholder={mortgageForm.mortgage_type === 'heloc' ? 'N/A for HELOC' : ''}
                                         />
                                     </div>
                                     <div>
@@ -857,15 +912,32 @@ export const PropertyDetails = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm text-gray-400 mb-1">Interest Rate (%) *</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            value={mortgageForm.interest_rate}
-                                            onChange={e => setMortgageForm(p => ({ ...p, interest_rate: e.target.value }))}
-                                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
-                                            required
-                                        />
+                                        <label className="block text-sm text-gray-400 mb-1">
+                                            {mortgageForm.mortgage_type === 'heloc' ? 'Prime Rate Offset (e.g., +0.5 or -0.25)' : 'Interest Rate (%) *'}
+                                        </label>
+                                        {mortgageForm.mortgage_type === 'heloc' ? (
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-white">Prime</span>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={mortgageForm.prime_rate_offset}
+                                                    onChange={e => setMortgageForm(p => ({ ...p, prime_rate_offset: e.target.value, rate_type: 'prime_plus' }))}
+                                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                                    placeholder="e.g., 0.5 or -0.25"
+                                                />
+                                                <span className="text-gray-400 text-sm">%</span>
+                                            </div>
+                                        ) : (
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={mortgageForm.interest_rate}
+                                                onChange={e => setMortgageForm(p => ({ ...p, interest_rate: e.target.value }))}
+                                                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                                required={mortgageForm.mortgage_type !== 'heloc'}
+                                            />
+                                        )}
                                     </div>
                                     <div>
                                         <label className="block text-sm text-gray-400 mb-1">Rate Type</label>
@@ -881,9 +953,11 @@ export const PropertyDetails = () => {
                                         <label className="block text-sm text-gray-400 mb-1">Term Length (years)</label>
                                         <input
                                             type="number"
-                                            value={mortgageForm.term_years}
+                                            value={mortgageForm.mortgage_type === 'heloc' ? '' : mortgageForm.term_years}
                                             onChange={e => setMortgageForm(p => ({ ...p, term_years: e.target.value }))}
-                                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                                            className={`w-full border border-gray-600 rounded-lg px-3 py-2 ${mortgageForm.mortgage_type === 'heloc' ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 text-white'}`}
+                                            disabled={mortgageForm.mortgage_type === 'heloc'}
+                                            placeholder={mortgageForm.mortgage_type === 'heloc' ? 'N/A for HELOC' : ''}
                                         />
                                     </div>
                                     <div>
@@ -897,14 +971,18 @@ export const PropertyDetails = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm text-gray-400 mb-1">Term End Date (Maturity) *</label>
+                                        <label className="block text-sm text-gray-400 mb-1">Term End Date (Maturity){mortgageForm.mortgage_type !== 'heloc' ? ' *' : ''}</label>
                                         <input
                                             type="date"
-                                            value={mortgageForm.term_end_date}
+                                            value={mortgageForm.mortgage_type === 'heloc' ? '' : mortgageForm.term_end_date}
                                             onChange={e => setMortgageForm(p => ({ ...p, term_end_date: e.target.value }))}
-                                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
-                                            required
+                                            className={`w-full border border-gray-600 rounded-lg px-3 py-2 ${mortgageForm.mortgage_type === 'heloc' ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 text-white'}`}
+                                            disabled={mortgageForm.mortgage_type === 'heloc'}
+                                            required={mortgageForm.mortgage_type !== 'heloc'}
                                         />
+                                        {mortgageForm.mortgage_type === 'heloc' && (
+                                            <p className="text-xs text-gray-500 mt-1">HELOC has no fixed term end date</p>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="block text-sm text-gray-400 mb-1">Payment Frequency</label>

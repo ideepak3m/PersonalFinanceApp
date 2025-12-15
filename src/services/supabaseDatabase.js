@@ -1567,6 +1567,9 @@ export const supabaseMortgagesDB = new SupabaseService('mortgages');
 export const supabaseMortgageTermsDB = new SupabaseService('mortgage_terms');
 export const supabaseMortgagePaymentsDB = new SupabaseService('mortgage_payments');
 
+// Liabilities service
+export const supabaseLiabilitiesDB = new SupabaseService('liabilities');
+
 // NEW: Phase 2 services for retirement planning
 export const supabaseUserProfileDB = new UserProfileService();
 export const supabaseGovernmentBenefitsDB = new GovernmentBenefitsService();

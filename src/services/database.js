@@ -42,6 +42,9 @@ export const mortgagesDB = dbModule.supabaseMortgagesDB;
 export const mortgageTermsDB = dbModule.supabaseMortgageTermsDB;
 export const mortgagePaymentsDB = dbModule.supabaseMortgagePaymentsDB;
 
+// ============ Liabilities Services ============
+export const liabilitiesDB = dbModule.supabaseLiabilitiesDB;
+
 // ============ Import/Staging Services ============
 export const importStagingDB = dbModule.supabaseImportStagingDB;
 export const importRawDataDB = dbModule.supabaseImportRawDataDB;

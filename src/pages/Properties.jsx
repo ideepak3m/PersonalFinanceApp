@@ -55,6 +55,7 @@ export const Properties = () => {
         current_market_value: '',
         property_tax_annual: '',
         hoa_monthly: '',
+        property_insurance_annual: '',
         expected_monthly_rent: '',
         is_primary_residence: true,
         notes: ''
@@ -89,6 +90,7 @@ export const Properties = () => {
             current_market_value: '',
             property_tax_annual: '',
             hoa_monthly: '',
+            property_insurance_annual: '',
             expected_monthly_rent: '',
             is_primary_residence: true,
             notes: ''
@@ -118,6 +120,7 @@ export const Properties = () => {
             current_market_value: property.current_market_value || '',
             property_tax_annual: property.property_tax_annual || '',
             hoa_monthly: property.hoa_monthly || '',
+            property_insurance_annual: property.property_insurance_annual || '',
             expected_monthly_rent: property.expected_monthly_rent || '',
             is_primary_residence: property.is_primary_residence ?? true,
             notes: property.notes || ''
@@ -156,6 +159,7 @@ export const Properties = () => {
                 current_market_value: formData.current_market_value ? parseFloat(formData.current_market_value) : null,
                 property_tax_annual: formData.property_tax_annual ? parseFloat(formData.property_tax_annual) : null,
                 hoa_monthly: formData.hoa_monthly ? parseFloat(formData.hoa_monthly) : 0,
+                property_insurance_annual: formData.property_insurance_annual ? parseFloat(formData.property_insurance_annual) : 0,
                 expected_monthly_rent: formData.expected_monthly_rent ? parseFloat(formData.expected_monthly_rent) : 0,
                 is_primary_residence: formData.property_type === 'primary_residence' || formData.is_primary_residence
             };
@@ -623,6 +627,16 @@ export const Properties = () => {
                                             type="number"
                                             value={formData.hoa_monthly}
                                             onChange={(e) => handleInputChange('hoa_monthly', e.target.value)}
+                                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-gray-400 mb-1">Annual Property Insurance</label>
+                                        <input
+                                            type="number"
+                                            value={formData.property_insurance_annual}
+                                            onChange={(e) => handleInputChange('property_insurance_annual', e.target.value)}
                                             className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
                                             placeholder="0"
                                         />

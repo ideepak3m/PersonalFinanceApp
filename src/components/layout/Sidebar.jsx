@@ -22,7 +22,8 @@ import {
     FolderOpen,
     Target,
     BookOpen,
-    Shield
+    Shield,
+    CreditCard
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -69,16 +70,21 @@ export const Sidebar = () => {
         },
         {
             type: 'group',
-            key: 'investments',
-            label: 'Investments',
+            key: 'assets',
+            label: 'Assets',
             icon: TrendingUp,
             basePaths: ['/investments', '/pdf-reader', '/properties', '/insurance'],
             children: [
                 { path: '/investments', label: 'Investment Accounts', icon: Wallet },
                 { path: '/properties', label: 'Properties', icon: Building2 },
                 { path: '/insurance', label: 'Insurance Policies', icon: Shield },
-                { path: '/pdf-reader', label: 'Import Statement', icon: Upload },
             ]
+        },
+        {
+            type: 'link',
+            path: '/liabilities',
+            label: 'Liabilities',
+            icon: CreditCard,
         },
         {
             type: 'group',
