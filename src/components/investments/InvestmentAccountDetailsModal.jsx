@@ -1,11 +1,16 @@
 // src/components/investments/InvestmentAccountDetailsModal.jsx
 import React, { useState, useEffect } from 'react';
-import { X, TrendingUp, Receipt, PieChart, Calendar, Filter, Download, ChevronDown, ChevronUp, Building2, Clock, Plus, Minus, DollarSign } from 'lucide-react';
+import { X, TrendingUp, Receipt, PieChart, Calendar, Filter, Download, ChevronDown, ChevronUp, Building2, Clock, Plus, Minus, DollarSign, Edit2, Upload } from 'lucide-react';
 import {
     holdingsDB,
     investmentTransactionsDB,
     cashTransactionsDB
 } from '../../services/database';
+import HoldingsForm from './HoldingsForm';
+import ImportHoldingsForm from './ImportHoldingsForm';
+import ImportCashTransactionsForm from './ImportCashTransactionsForm';
+import InvestmentTransactionForm from './InvestmentTransactionForm';
+import UpdateHoldingsPriceForm from './UpdateHoldingsPriceForm';
 
 const InvestmentAccountDetailsModal = ({ account, onClose }) => {
     const [activeTab, setActiveTab] = useState('holdings');
@@ -17,6 +22,19 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
     const [customDateRange, setCustomDateRange] = useState({ from: '', to: '' });
     const [transactionTypeFilter, setTransactionTypeFilter] = useState('all');
     const [expandedHolding, setExpandedHolding] = useState(null); // Track which holding timeline is expanded
+
+    // Holdings form state
+    const [showHoldingsForm, setShowHoldingsForm] = useState(false);
+    const [editingHolding, setEditingHolding] = useState(null);
+    const [showImportForm, setShowImportForm] = useState(false);
+    const [showImportCashForm, setShowImportCashForm] = useState(false);
+
+    // Transaction form state
+    const [showTransactionForm, setShowTransactionForm] = useState(false);
+    const [editingTransaction, setEditingTransaction] = useState(null);
+
+    // Update price form state
+    const [showUpdatePriceForm, setShowUpdatePriceForm] = useState(false);
 
     useEffect(() => {
         loadAccountData();
@@ -353,19 +371,47 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                             {/* Holdings Tab */}
                             {activeTab === 'holdings' && (
                                 <div className="space-y-4">
-                                    {/* Date Filter */}
-                                    <div className="flex items-center gap-4 mb-4">
-                                        <label className="text-sm font-medium text-gray-700">As of Date:</label>
-                                        <select
-                                            value={dateFilter}
-                                            onChange={(e) => setDateFilter(e.target.value)}
-                                            className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
-                                        >
-                                            <option value="all">All Dates</option>
-                                            {holdingsDates.map(date => (
-                                                <option key={date} value={date}>{formatDate(date)}</option>
-                                            ))}
-                                        </select>
+                                    {/* Header with Date Filter and Add/Import Buttons */}
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-4">
+                                            <label className="text-sm font-medium text-gray-700">As of Date:</label>
+                                            <select
+                                                value={dateFilter}
+                                                onChange={(e) => setDateFilter(e.target.value)}
+                                                className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                            >
+                                                <option value="all">All Dates</option>
+                                                {holdingsDates.map(date => (
+                                                    <option key={date} value={date}>{formatDate(date)}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setShowUpdatePriceForm(true)}
+                                                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                                            >
+                                                <TrendingUp className="w-4 h-4" />
+                                                Update NAV
+                                            </button>
+                                            <button
+                                                onClick={() => setShowImportForm(true)}
+                                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                            >
+                                                <Upload className="w-4 h-4" />
+                                                Import
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setEditingHolding(null);
+                                                    setShowHoldingsForm(true);
+                                                }}
+                                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                                Add Holding
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {filteredHoldings.length === 0 ? (
@@ -384,6 +430,7 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                                     <th className="px-4 py-3 text-right font-medium text-gray-700">Market Value</th>
                                                     <th className="px-4 py-3 text-right font-medium text-gray-700">Book Value</th>
                                                     <th className="px-4 py-3 text-right font-medium text-gray-700">Gain/Loss</th>
+                                                    <th className="px-4 py-3 text-center font-medium text-gray-700 w-16">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y">
@@ -436,12 +483,25 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                                                                 <td className={`px-4 py-3 text-right font-medium ${gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                                                     {formatCurrency(gainLoss)}
                                                                 </td>
+                                                                <td className="px-4 py-3 text-center">
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setEditingHolding(holding);
+                                                                            setShowHoldingsForm(true);
+                                                                        }}
+                                                                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                                                        title="Edit holding"
+                                                                    >
+                                                                        <Edit2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </td>
                                                             </tr>
 
                                                             {/* Expanded Timeline Row */}
                                                             {isExpanded && timeline.length > 0 && (
                                                                 <tr>
-                                                                    <td colSpan="8" className="px-4 py-4 bg-gradient-to-r from-indigo-50 to-purple-50">
+                                                                    <td colSpan="9" className="px-4 py-4 bg-gradient-to-r from-indigo-50 to-purple-50">
                                                                         <div className="ml-8">
                                                                             <div className="flex items-center gap-2 mb-3">
                                                                                 <Clock className="w-4 h-4 text-indigo-600" />
@@ -556,19 +616,31 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                             {/* Transactions Tab */}
                             {activeTab === 'transactions' && (
                                 <div className="space-y-4">
-                                    {/* Filters */}
-                                    <div className="flex items-center gap-4 mb-4">
-                                        <label className="text-sm font-medium text-gray-700">Type:</label>
-                                        <select
-                                            value={transactionTypeFilter}
-                                            onChange={(e) => setTransactionTypeFilter(e.target.value)}
-                                            className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    {/* Filters and Actions */}
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-4">
+                                            <label className="text-sm font-medium text-gray-700">Type:</label>
+                                            <select
+                                                value={transactionTypeFilter}
+                                                onChange={(e) => setTransactionTypeFilter(e.target.value)}
+                                                className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                            >
+                                                <option value="all">All Types</option>
+                                                {transactionTypes.map(type => (
+                                                    <option key={type} value={type}>{type}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setEditingTransaction(null);
+                                                setShowTransactionForm(true);
+                                            }}
+                                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                                         >
-                                            <option value="all">All Types</option>
-                                            {transactionTypes.map(type => (
-                                                <option key={type} value={type}>{type}</option>
-                                            ))}
-                                        </select>
+                                            <Plus className="w-4 h-4" />
+                                            Add Transaction
+                                        </button>
                                     </div>
 
                                     {filteredTransactions.length === 0 ? (
@@ -620,6 +692,17 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                             {/* Fees & Cash Tab */}
                             {activeTab === 'fees' && (
                                 <div className="space-y-4">
+                                    {/* Import Button */}
+                                    <div className="flex justify-end mb-4">
+                                        <button
+                                            onClick={() => setShowImportCashForm(true)}
+                                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                        >
+                                            <Upload className="w-4 h-4" />
+                                            Import Cash Transactions
+                                        </button>
+                                    </div>
+
                                     {cashTransactions.length === 0 ? (
                                         <div className="text-center py-12 text-gray-500">
                                             No fee or cash transactions found
@@ -705,6 +788,73 @@ const InvestmentAccountDetailsModal = ({ account, onClose }) => {
                     </button>
                 </div>
             </div>
+
+            {/* Holdings Form Modal */}
+            <HoldingsForm
+                isOpen={showHoldingsForm}
+                onClose={() => {
+                    setShowHoldingsForm(false);
+                    setEditingHolding(null);
+                }}
+                onSave={() => {
+                    loadAccountData();
+                    setShowHoldingsForm(false);
+                    setEditingHolding(null);
+                }}
+                holding={editingHolding}
+                accountId={account.supabase_id || account.id}
+                existingSymbols={[...new Set(holdings.map(h => h.symbol).filter(Boolean))]}
+            />
+
+            {/* Import Holdings Form Modal */}
+            <ImportHoldingsForm
+                isOpen={showImportForm}
+                onClose={() => setShowImportForm(false)}
+                onImportComplete={() => {
+                    loadAccountData();
+                    setShowImportForm(false);
+                }}
+                accountId={account.supabase_id || account.id}
+            />
+
+            {/* Import Cash Transactions Form Modal */}
+            <ImportCashTransactionsForm
+                isOpen={showImportCashForm}
+                onClose={() => setShowImportCashForm(false)}
+                onImportComplete={() => {
+                    loadAccountData();
+                    setShowImportCashForm(false);
+                }}
+                accountId={account.supabase_id || account.id}
+            />
+
+            {/* Investment Transaction Form Modal */}
+            <InvestmentTransactionForm
+                isOpen={showTransactionForm}
+                onClose={() => {
+                    setShowTransactionForm(false);
+                    setEditingTransaction(null);
+                }}
+                onSave={() => {
+                    loadAccountData();
+                    setShowTransactionForm(false);
+                    setEditingTransaction(null);
+                }}
+                transaction={editingTransaction}
+                accountId={account.supabase_id || account.id}
+            />
+
+            {/* Update Holdings Price Form Modal */}
+            <UpdateHoldingsPriceForm
+                isOpen={showUpdatePriceForm}
+                onClose={() => setShowUpdatePriceForm(false)}
+                onSave={() => {
+                    loadAccountData();
+                    setShowUpdatePriceForm(false);
+                }}
+                holdings={holdings}
+                accountId={account.supabase_id || account.id}
+            />
         </div>
     );
 };

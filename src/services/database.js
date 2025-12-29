@@ -35,6 +35,7 @@ export const investmentAccountsDB = dbModule.supabaseInvestmentAccountsDB;
 export const investmentManagersDB = dbModule.supabaseInvestmentManagersDB;
 export const investmentTransactionsDB = dbModule.supabaseInvestmentTransactionsDB;
 export const cashTransactionsDB = dbModule.supabaseCashTransactionsDB;
+export const priceHistoryDB = dbModule.supabasePriceHistoryDB;
 
 // ============ Property & Mortgage Services ============
 export const propertiesDB = dbModule.supabasePropertiesDB;
@@ -86,6 +87,7 @@ export const supabaseInvestmentAccountsDB = investmentAccountsDB;
 export const supabaseInvestmentManagersDB = investmentManagersDB;
 export const supabaseInvestmentTransactionsDB = investmentTransactionsDB;
 export const supabaseCashTransactionsDB = cashTransactionsDB;
+export const supabasePriceHistoryDB = priceHistoryDB;
 export const supabaseImportStagingDB = importStagingDB;
 export const supabaseImportRawDataDB = importRawDataDB;
 export const supabaseColumnMappingsDB = columnMappingsDB;

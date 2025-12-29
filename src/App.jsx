@@ -62,8 +62,8 @@ function App() {
                       />
                       <main className="flex-1 overflow-auto p-6">
                         <Routes>
-                          {/* Dashboard */}
-                          <Route path="/" element={<Dashboard />} />
+                          {/* Dashboard - Shows Analytics overview */}
+                          <Route path="/" element={<Analytics />} />
 
                           {/* Transactions - Bank/Credit Card accounts */}
                           <Route path="accounts" element={<AccountsDashboard />} />

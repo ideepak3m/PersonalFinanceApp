@@ -148,24 +148,17 @@ const Insurance = () => {
 
         const startDate = new Date(policy.policy_start_date);
 
-        // Get months between payments based on frequency
-        const frequencyMonths = {
-            monthly: 1,
-            quarterly: 3,
-            half_yearly: 6,
-            annual: 12
-        };
-
-        const monthsInterval = frequencyMonths[policy.premium_frequency] || 12;
-
-        // Calculate total number of premiums in the payment term
+        // Premium payment term is the number of years during which premiums are paid
+        // Last premium date = start_date + (premium_payment_term - 1) years
+        // For a 32-year term starting Apr 2010: last premium is Apr 2010 + 31 years = Apr 2041
+        // However, insurance convention: term of 32 years means payments in years 1-32
+        // Year 1 = 2010, Year 32 = 2010 + 32 - 1 = 2041... 
+        // 
+        // User expects 2042 for 32-year term starting 2010
+        // This suggests: last premium = start_date + premium_payment_term years (32 years = Apr 2042)
         const totalMonths = policy.premium_payment_term * 12;
-        const totalPremiums = Math.floor(totalMonths / monthsInterval);
-
-        // The last premium is at (totalPremiums - 1) intervals from start
-        // Because first premium is at start date (interval 0)
         const lastPremiumDate = new Date(startDate);
-        lastPremiumDate.setMonth(lastPremiumDate.getMonth() + (totalPremiums - 1) * monthsInterval);
+        lastPremiumDate.setMonth(lastPremiumDate.getMonth() + totalMonths);
 
         return lastPremiumDate.toISOString().split('T')[0];
     };
@@ -185,7 +178,8 @@ const Insurance = () => {
 
         const monthsInterval = frequencyMonths[policy.premium_frequency] || 12;
         const totalMonths = policy.premium_payment_term * 12;
-        const totalPremiums = Math.floor(totalMonths / monthsInterval);
+        // +1 because first premium at start and last at start + term
+        const totalPremiums = Math.floor(totalMonths / monthsInterval) + 1;
 
         return totalPremiums;
     };
@@ -214,9 +208,13 @@ const Insurance = () => {
                     aValue = a.plan_type?.toLowerCase() || '';
                     bValue = b.plan_type?.toLowerCase() || '';
                     break;
-                case 'sum_assured':
-                    aValue = parseFloat(a.sum_assured) || 0;
-                    bValue = parseFloat(b.sum_assured) || 0;
+                case 'plan_name':
+                    aValue = a.plan_name?.toLowerCase() || '';
+                    bValue = b.plan_name?.toLowerCase() || '';
+                    break;
+                case 'estimated_payout':
+                    aValue = (parseFloat(a.sum_assured) || 0) + (parseFloat(a.accrued_bonus) || 0);
+                    bValue = (parseFloat(b.sum_assured) || 0) + (parseFloat(b.accrued_bonus) || 0);
                     break;
                 case 'premium_amount':
                     aValue = parseFloat(a.premium_amount) || 0;
@@ -439,11 +437,11 @@ const Insurance = () => {
                                         <p className="text-xs text-gray-500">{getPlanTypeLabel(policy.plan_type)}</p>
                                     </div>
 
-                                    {/* Sum Assured */}
+                                    {/* Estimated Payout */}
                                     <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                                        <p className="text-xs text-gray-500">Sum Assured</p>
+                                        <p className="text-xs text-gray-500">Estimated Payout</p>
                                         <p className="text-lg font-bold text-gray-900">
-                                            {formatCurrency(policy.sum_assured, policy.currency)}
+                                            {formatCurrency((policy.sum_assured || 0) + (policy.accrued_bonus || 0), policy.currency)}
                                         </p>
                                     </div>
 
@@ -516,7 +514,8 @@ const Insurance = () => {
                                 <tr>
                                     <SortableHeader column="insurer_name" label="Policy" />
                                     <SortableHeader column="plan_type" label="Type" />
-                                    <SortableHeader column="sum_assured" label="Sum Assured" align="right" />
+                                    <SortableHeader column="plan_name" label="Plan Name" />
+                                    <SortableHeader column="estimated_payout" label="Estimated Payout" align="right" />
                                     <SortableHeader column="premium_amount" label="Premium" align="right" />
                                     <SortableHeader column="next_premium_due_date" label="Next Due" />
                                     <SortableHeader column="final_payment" label="Final Payment" />
@@ -539,12 +538,12 @@ const Insurance = () => {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <p className="text-sm">{getPlanTypeLabel(policy.plan_type)}</p>
-                                                {policy.plan_name && (
-                                                    <p className="text-xs text-gray-500">{policy.plan_name}</p>
-                                                )}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <p className="text-sm">{policy.plan_name || '-'}</p>
                                             </td>
                                             <td className="px-4 py-3 text-right font-medium">
-                                                {formatCurrency(policy.sum_assured, policy.currency)}
+                                                {formatCurrency((policy.sum_assured || 0) + (policy.accrued_bonus || 0), policy.currency)}
                                             </td>
                                             <td className="px-4 py-3 text-right">
                                                 <p>{formatCurrency(policy.premium_amount, policy.currency)}</p>

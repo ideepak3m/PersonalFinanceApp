@@ -16,6 +16,7 @@ export const ColumnMapper = ({ file, onComplete, onCancel }) => {
         { key: 'date', label: 'Date *', required: true },
         { key: 'description', label: 'Description *', required: true },
         { key: 'amount', label: 'Amount *', required: true },
+        { key: 'cr_dr', label: 'CR/DR Column (CREDIT/DEBIT)', required: false },
         { key: 'type', label: 'Transaction Type', required: false },
         { key: 'memo', label: 'Memo', required: false },
         { key: 'currency', label: 'Currency', required: false },
@@ -37,11 +38,11 @@ export const ColumnMapper = ({ file, onComplete, onCancel }) => {
                 const columns = results.meta.fields || [];
                 setCsvColumns(columns);
                 setPreviewData(results.data);
-                
+
                 // Auto-detect mappings based on common column names
                 const autoMappings = autoDetectMappings(columns);
                 setColumnMappings(autoMappings);
-                
+
                 setLoading(false);
             },
             error: (error) => {
@@ -63,43 +64,50 @@ export const ColumnMapper = ({ file, onComplete, onCancel }) => {
 
     const autoDetectMappings = (columns) => {
         const mappings = {};
-        
+
         columns.forEach(col => {
             const colLower = col.toLowerCase();
-            
+
             // Date detection
             if (colLower.includes('date') && !mappings.date) {
                 mappings.date = col;
             }
-            
+
             // Description detection
-            if ((colLower.includes('description') || colLower.includes('merchant') || 
-                 colLower.includes('name') || colLower === 'client name') && !mappings.description) {
+            if ((colLower.includes('description') || colLower.includes('merchant') ||
+                colLower.includes('name') || colLower === 'client name') && !mappings.description) {
                 mappings.description = col;
             }
-            
+
             // Amount detection (look for balance, debit, credit, or amount)
-            if ((colLower.includes('amount') || colLower.includes('balance') || 
-                 colLower === 'debit' || colLower === 'credit') && !mappings.amount) {
+            if ((colLower.includes('amount') || colLower.includes('balance') ||
+                colLower === 'debit' || colLower === 'credit') && !mappings.amount) {
                 mappings.amount = col;
             }
-            
+
+            // CR/DR column detection (CREDIT/DEBIT indicator)
+            if ((colLower === 'cr/dr' || colLower === 'cr_dr' || colLower === 'crdr' ||
+                colLower === 'cr / dr' || colLower === 'credit/debit' ||
+                colLower === 'transaction type' || colLower === 'dr/cr') && !mappings.cr_dr) {
+                mappings.cr_dr = col;
+            }
+
             // Type detection
             if ((colLower.includes('type') || colLower.includes('transaction type')) && !mappings.type) {
                 mappings.type = col;
             }
-            
+
             // Memo detection
             if ((colLower.includes('memo') || colLower.includes('note')) && !mappings.memo) {
                 mappings.memo = col;
             }
-            
+
             // Currency detection
             if (colLower.includes('currency') && !mappings.currency) {
                 mappings.currency = col;
             }
         });
-        
+
         return mappings;
     };
 
@@ -115,7 +123,7 @@ export const ColumnMapper = ({ file, onComplete, onCancel }) => {
         const missingRequired = transactionFields
             .filter(field => field.required && !columnMappings[field.key])
             .map(field => field.label);
-        
+
         if (missingRequired.length > 0) {
             alert(`Please map the following required fields:\n${missingRequired.join('\n')}`);
             return;
@@ -140,21 +148,38 @@ export const ColumnMapper = ({ file, onComplete, onCancel }) => {
                                 const mapped = {
                                     id: `csv_${Date.now()}_${index}`,
                                 };
-                                
+
                                 // Apply mappings
                                 Object.entries(columnMappings).forEach(([txnField, csvCol]) => {
                                     if (csvCol && row[csvCol] !== undefined) {
                                         mapped[txnField] = row[csvCol];
                                     }
                                 });
-                                
+
                                 // Parse amount to float
                                 if (mapped.amount) {
                                     // Remove any currency symbols and commas
                                     const cleanAmount = String(mapped.amount).replace(/[$,]/g, '');
-                                    mapped.amount = parseFloat(cleanAmount) || 0;
+                                    let parsedAmount = parseFloat(cleanAmount) || 0;
+
+                                    // If CR/DR column is mapped, use absolute amount and determine type from CR/DR
+                                    if (mapped.cr_dr) {
+                                        const crDrValue = String(mapped.cr_dr).toUpperCase().trim();
+                                        parsedAmount = Math.abs(parsedAmount);
+
+                                        // Set type based on CR/DR column value
+                                        if (crDrValue === 'CREDIT' || crDrValue === 'CR' || crDrValue === 'C') {
+                                            mapped.type = 'credit';
+                                        } else if (crDrValue === 'DEBIT' || crDrValue === 'DR' || crDrValue === 'D') {
+                                            mapped.type = 'debit';
+                                        }
+                                        // Clear the cr_dr field as it's not a transaction field
+                                        delete mapped.cr_dr;
+                                    }
+
+                                    mapped.amount = parsedAmount;
                                 }
-                                
+
                                 // Ensure date format
                                 if (mapped.date) {
                                     // Try to parse and standardize the date
@@ -163,20 +188,30 @@ export const ColumnMapper = ({ file, onComplete, onCancel }) => {
                                         mapped.date = date.toISOString().split('T')[0];
                                     }
                                 }
-                                
+
                                 // Set default values if not mapped
                                 if (!mapped.currency) {
                                     mapped.currency = 'CAD';
                                 }
-                                
-                                if (!mapped.type) {
+
+                                // Normalize type to lowercase and handle CREDIT/DEBIT values
+                                if (mapped.type) {
+                                    const typeUpper = String(mapped.type).toUpperCase().trim();
+                                    if (typeUpper === 'CREDIT' || typeUpper === 'CR' || typeUpper === 'C') {
+                                        mapped.type = 'credit';
+                                    } else if (typeUpper === 'DEBIT' || typeUpper === 'DR' || typeUpper === 'D') {
+                                        mapped.type = 'debit';
+                                    } else {
+                                        mapped.type = mapped.type.toLowerCase();
+                                    }
+                                } else {
                                     // Auto-detect type based on amount
                                     mapped.type = mapped.amount >= 0 ? 'credit' : 'debit';
                                 }
-                                
+
                                 return mapped;
                             });
-                            
+
                             resolve(mappedTransactions);
                         } catch (error) {
                             reject(error);
@@ -218,7 +253,7 @@ export const ColumnMapper = ({ file, onComplete, onCancel }) => {
                     {processedRows} / {totalRows} rows ({progress}%)
                 </p>
                 <div className="w-full bg-gray-200 rounded-full h-2 mt-4 max-w-md mx-auto">
-                    <div 
+                    <div
                         className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                         style={{ width: `${progress}%` }}
                     ></div>
@@ -232,7 +267,7 @@ export const ColumnMapper = ({ file, onComplete, onCancel }) => {
             <div>
                 <h3 className="text-lg font-bold mb-2">Map CSV Columns to Transaction Fields</h3>
                 <p className="text-sm text-gray-600">
-                    Match the columns from your CSV file to the transaction fields below. 
+                    Match the columns from your CSV file to the transaction fields below.
                     Fields marked with * are required.
                 </p>
                 {totalRows > 0 && (
@@ -252,11 +287,10 @@ export const ColumnMapper = ({ file, onComplete, onCancel }) => {
                         <select
                             value={columnMappings[field.key] || ''}
                             onChange={(e) => handleMappingChange(field.key, e.target.value)}
-                            className={`px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                                field.required && !columnMappings[field.key] 
-                                    ? 'border-red-300 bg-red-50' 
+                            className={`px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${field.required && !columnMappings[field.key]
+                                    ? 'border-red-300 bg-red-50'
                                     : 'border-gray-300'
-                            }`}
+                                }`}
                         >
                             <option value="">-- Select CSV Column --</option>
                             {csvColumns.map(col => (

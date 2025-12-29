@@ -170,8 +170,8 @@ class SupabaseService {
             // Convert camelCase to snake_case for database
             const snakeCaseRecord = this.toSnakeCase(record);
 
-            // Ensure user_id is set
-            if (!snakeCaseRecord.user_id) {
+            // Ensure user_id is set (only if table has user_id column)
+            if (this.hasUserIdColumn() && !snakeCaseRecord.user_id) {
                 snakeCaseRecord.user_id = user.id;
             }
 
@@ -199,7 +199,8 @@ class SupabaseService {
             // Convert all records to snake_case
             const snakeCaseRecords = records.map(record => {
                 const converted = this.toSnakeCase(record);
-                if (!converted.user_id) {
+                // Only set user_id if table has user_id column
+                if (this.hasUserIdColumn() && !converted.user_id) {
                     converted.user_id = user.id;
                 }
                 return converted;
@@ -1488,6 +1489,66 @@ class InvestmentTransactionsService extends SupabaseService {
 }
 
 /**
+ * Price History Service - No user_id column
+ * Stores historical NAV/price data for securities
+ */
+class PriceHistoryService extends SupabaseService {
+    constructor() {
+        super('price_history', 'personal_finance');
+    }
+
+    hasUserIdColumn() {
+        return false; // This is reference data, no user_id
+    }
+
+    /**
+     * Add price history record, ignoring duplicates
+     */
+    async addPrice(symbol, price, priceDate, currency = 'CAD', securityName = null) {
+        try {
+            const { data, error } = await this.table()
+                .upsert({
+                    symbol,
+                    security_name: securityName,
+                    price,
+                    price_date: priceDate,
+                    currency
+                }, {
+                    onConflict: 'symbol,price_date,currency',
+                    ignoreDuplicates: false
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } catch (error) {
+            console.error('Error adding price history:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get price history for a symbol
+     */
+    async getBySymbol(symbol, currency = 'CAD') {
+        try {
+            const { data, error } = await this.table()
+                .select('*')
+                .eq('symbol', symbol)
+                .eq('currency', currency)
+                .order('price_date', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error('Error fetching price history:', error);
+            throw error;
+        }
+    }
+}
+
+/**
  * Cash Transactions Service - No user_id column
  * Transactions are linked via account_id to investment_accounts which have user_id
  */
@@ -1560,6 +1621,7 @@ export const supabaseInvestmentAccountsDB = new SupabaseService('investment_acco
 export const supabaseInvestmentManagersDB = new SupabaseService('investment_managers');
 export const supabaseInvestmentTransactionsDB = new InvestmentTransactionsService();
 export const supabaseCashTransactionsDB = new CashTransactionsService();
+export const supabasePriceHistoryDB = new PriceHistoryService();
 
 // Property & Mortgage services
 export const supabasePropertiesDB = new SupabaseService('properties');

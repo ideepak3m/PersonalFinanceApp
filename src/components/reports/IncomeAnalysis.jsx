@@ -18,7 +18,8 @@ import {
     X,
     Home,
     Building2,
-    Coins
+    Coins,
+    Wallet
 } from 'lucide-react';
 
 const MONTHS = [
@@ -222,7 +223,7 @@ export const IncomeAnalysis = () => {
                 incomeTypes['Employment'] += amount;
             } else if (source.includes('dividend') || source.includes('interest') || source.includes('investment')) {
                 incomeTypes['Investments'] += amount;
-            } else if (source.includes('business') || source.includes('self-employ')) {
+            } else if (source.includes('business') || source.includes('self-employ') || source.includes('owner') || source.includes('draw') || source.includes('freelance')) {
                 incomeTypes['Business'] += amount;
             } else if (source.includes('rental') || source.includes('rent')) {
                 incomeTypes['Rental'] += amount;
@@ -404,6 +405,17 @@ export const IncomeAnalysis = () => {
                         </div>
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-amber-500/20 rounded-full flex items-center justify-center">
+                                    <Wallet className="w-3 h-3 text-amber-400" />
+                                </div>
+                                <span className="text-gray-300 text-xs">Owner Draw</span>
+                            </div>
+                            <span className="text-amber-400 font-semibold text-sm">
+                                {formatCurrency(metrics.incomeTypes['Business'])}
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
                                 <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center">
                                     <Home className="w-3 h-3 text-green-400" />
                                 </div>
@@ -432,7 +444,7 @@ export const IncomeAnalysis = () => {
                                 <span className="text-gray-300 text-xs">Other</span>
                             </div>
                             <span className="text-gray-400 font-semibold text-sm">
-                                {formatCurrency(metrics.incomeTypes['Other'] + metrics.incomeTypes['Business'])}
+                                {formatCurrency(metrics.incomeTypes['Other'])}
                             </span>
                         </div>
                     </div>

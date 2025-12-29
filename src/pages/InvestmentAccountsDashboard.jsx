@@ -1,7 +1,7 @@
 // src/pages/InvestmentAccountsDashboard.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, TrendingUp, Calendar, Building2, ChevronRight, RefreshCw, Edit2, X, Upload } from 'lucide-react';
+import { Search, TrendingUp, Calendar, Building2, ChevronRight, RefreshCw, Edit2, X, Upload, Plus } from 'lucide-react';
 import {
     getInvestmentAccounts,
     getLastTransactionDates,
@@ -11,6 +11,7 @@ import {
     updateInvestmentAccount
 } from '../services/investmentDataService';
 import InvestmentAccountDetailsModal from '../components/investments/InvestmentAccountDetailsModal';
+import InvestmentAccountForm from '../components/investments/InvestmentAccountForm';
 
 export const InvestmentAccountsDashboard = () => {
     const navigate = useNavigate();
@@ -23,6 +24,7 @@ export const InvestmentAccountsDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [selectedAccount, setSelectedAccount] = useState(null);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [showAddAccountForm, setShowAddAccountForm] = useState(false);
 
     // Rename modal state
     const [showRenameModal, setShowRenameModal] = useState(false);
@@ -179,6 +181,13 @@ export const InvestmentAccountsDashboard = () => {
                         />
                     </div>
                     <button
+                        onClick={() => setShowAddAccountForm(true)}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add Account
+                    </button>
+                    <button
                         onClick={loadData}
                         disabled={loading}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
@@ -324,6 +333,7 @@ export const InvestmentAccountsDashboard = () => {
                     onClose={() => {
                         setShowDetailsModal(false);
                         setSelectedAccount(null);
+                        loadData(); // Reload dashboard data after closing
                     }}
                 />
             )}
@@ -399,6 +409,16 @@ export const InvestmentAccountsDashboard = () => {
                     </div>
                 </div>
             )}
+
+            {/* Add Account Form Modal */}
+            <InvestmentAccountForm
+                isOpen={showAddAccountForm}
+                onClose={() => setShowAddAccountForm(false)}
+                onSave={() => {
+                    setShowAddAccountForm(false);
+                    loadData();
+                }}
+            />
         </div>
     );
 };

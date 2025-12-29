@@ -1,0 +1,2100 @@
+# Personal Finance Database Schema
+# Schema: personal_finance
+# Database: Supabase (PostgreSQL)
+# Last Updated: Auto-generated from SupabaseTableSchema.md
+
+schema: personal_finance
+database: supabase
+version: "1.0"
+
+# ============================================================
+# CORE TABLES
+# ============================================================
+
+tables:
+  # ------------------------------------------------------------
+  # ACCOUNTS - Bank accounts, credit cards, etc.
+  # ------------------------------------------------------------
+  accounts:
+    description: "User bank accounts, credit cards, and other financial accounts"
+    columns:
+      id:
+        type: bigint
+        primary_key: true
+        auto_increment: true
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      name:
+        type: text
+        nullable: false
+      type:
+        type: text
+        nullable: false
+        enum: [checking, savings, credit_card, investment, loan]
+      institution:
+        type: text
+      account_number:
+        type: text
+      currency:
+        type: text
+        default: "CAD"
+      balance:
+        type: numeric(12,2)
+        default: 0
+      is_active:
+        type: boolean
+        default: true
+      opened_date:
+        type: date
+      closed_date:
+        type: date
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+      country:
+        type: text
+        default: "CA"
+
+  # ------------------------------------------------------------
+  # TRANSACTIONS - Financial transactions from all accounts
+  # ------------------------------------------------------------
+  transactions:
+    description: "All financial transactions (income, expenses, transfers)"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      date:
+        type: date
+        nullable: false
+      raw_merchant_name:
+        type: text
+        nullable: false
+        description: "Original merchant name from statement"
+      normalized_merchant_id:
+        type: uuid
+        foreign_key: merchant(id)
+        description: "Link to normalized merchant for categorization"
+      amount:
+        type: numeric(12,2)
+        nullable: false
+      currency:
+        type: text
+        nullable: false
+      is_split:
+        type: boolean
+        default: false
+        description: "True if transaction is split across multiple categories"
+      notes:
+        type: text
+      category_id:
+        type: uuid
+        foreign_key: category(id)
+        on_delete: set null
+      description:
+        type: text
+      memo:
+        type: text
+      type:
+        type: text
+        enum: [income, expense, transfer]
+      account_id:
+        type: bigint
+        foreign_key: accounts(id)
+        on_delete: set null
+      chart_of_account_id:
+        type: uuid
+        foreign_key: chart_of_accounts(id)
+        on_delete: set null
+      split_chart_of_account_id:
+        type: uuid
+        foreign_key: chart_of_accounts(id)
+        on_delete: set null
+      product_id:
+        type: uuid
+      status:
+        type: text
+        default: "pending_merchant_mapping"
+        enum: [pending_merchant_mapping, categorized, reviewed]
+      inserted_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # TRANSACTION_SPLIT - Split transactions across categories
+  # ------------------------------------------------------------
+  transaction_split:
+    description: "Split transaction amounts across multiple categories/chart of accounts"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      transaction_id:
+        type: uuid
+        foreign_key: transactions(id)
+        on_delete: cascade
+      category_id:
+        type: uuid
+        foreign_key: category(id)
+      amount:
+        type: numeric(12,2)
+        nullable: false
+      percentage:
+        type: numeric(5,2)
+      belief_tag:
+        type: text
+      chart_of_account_id:
+        type: uuid
+        foreign_key: chart_of_accounts(id)
+      description:
+        type: text
+      user_id:
+        type: uuid
+      inserted_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # CATEGORY - Transaction categories
+  # ------------------------------------------------------------
+  category:
+    description: "Transaction categories for classification"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      name:
+        type: text
+        nullable: false
+      parent_id:
+        type: uuid
+        foreign_key: category(id)
+        description: "Self-reference for subcategories"
+      type:
+        type: text
+        enum: [income, expense]
+      icon:
+        type: text
+      color:
+        type: text
+      is_system:
+        type: boolean
+        default: false
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # CHART_OF_ACCOUNTS - Accounting classification
+  # ------------------------------------------------------------
+  chart_of_accounts:
+    description: "Chart of accounts for proper accounting classification (Income/Expense types)"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      code:
+        type: text
+        nullable: false
+        description: "Account code (e.g., 4000, 5000)"
+      name:
+        type: text
+        nullable: false
+      type:
+        type: text
+        nullable: false
+        enum: [income, expense, asset, liability, equity]
+      description:
+        type: text
+      is_system:
+        type: boolean
+        default: false
+      is_active:
+        type: boolean
+        default: true
+      parent_id:
+        type: uuid
+        foreign_key: chart_of_accounts(id)
+      display_order:
+        type: integer
+        default: 0
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+    indexes:
+      - name: idx_coa_user_type
+        columns: [user_id, type]
+
+  # ------------------------------------------------------------
+  # MERCHANT - Normalized merchant names
+  # ------------------------------------------------------------
+  merchant:
+    description: "Normalized merchant names for consistent categorization"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      name:
+        type: text
+        nullable: false
+        description: "Normalized merchant name"
+      category_id:
+        type: uuid
+        foreign_key: category(id)
+      chart_of_account_id:
+        type: uuid
+        foreign_key: chart_of_accounts(id)
+        description: "Default chart of account for this merchant"
+      is_subscription:
+        type: boolean
+        default: false
+      is_recurring:
+        type: boolean
+        default: false
+      logo_url:
+        type: text
+      website:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # DESCRIPTION_RULES - Auto-categorization rules
+  # ------------------------------------------------------------
+  description_rules:
+    description: "Rules for auto-categorizing transactions based on description patterns"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      pattern:
+        type: text
+        nullable: false
+        description: "Regex or text pattern to match"
+      match_type:
+        type: text
+        default: "contains"
+        enum: [contains, starts_with, ends_with, exact, regex]
+      merchant_id:
+        type: uuid
+        foreign_key: merchant(id)
+        on_delete: cascade
+      category_id:
+        type: uuid
+        foreign_key: category(id)
+      chart_of_account_id:
+        type: uuid
+        foreign_key: chart_of_accounts(id)
+      priority:
+        type: integer
+        default: 0
+      is_active:
+        type: boolean
+        default: true
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # MERCHANT_SPLIT_RULES - Default split rules per merchant
+  # ------------------------------------------------------------
+  merchant_split_rules:
+    description: "Default transaction split rules for specific merchants"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      merchant_id:
+        type: uuid
+        foreign_key: merchant(id)
+        on_delete: cascade
+      chart_of_account_id:
+        type: uuid
+        foreign_key: chart_of_accounts(id)
+      percentage:
+        type: numeric(5,2)
+        nullable: false
+      is_active:
+        type: boolean
+        default: true
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+# ============================================================
+# INVESTMENT TABLES
+# ============================================================
+
+  # ------------------------------------------------------------
+  # INVESTMENT_ACCOUNTS - Brokerage accounts (TFSA, RRSP, etc.)
+  # ------------------------------------------------------------
+  investment_accounts:
+    description: "Investment/brokerage accounts (TFSA, RRSP, Non-Registered, etc.)"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      account_name:
+        type: text
+        nullable: false
+      account_type:
+        type: text
+        nullable: false
+        enum: [TFSA, RRSP, RRIF, LIRA, Non-Registered, RESP, Corporate, NPS, PPF, EPF, FD, Other]
+      institution:
+        type: text
+      account_number:
+        type: text
+      currency:
+        type: text
+        default: "CAD"
+      is_active:
+        type: boolean
+        default: true
+      opened_date:
+        type: date
+      notes:
+        type: text
+      manager_id:
+        type: uuid
+        foreign_key: investment_managers(id)
+        on_delete: set null
+      country:
+        type: text
+        default: "CA"
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # INVESTMENT_MANAGERS - Financial advisors/managers
+  # ------------------------------------------------------------
+  investment_managers:
+    description: "Investment managers/financial advisors"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      name:
+        type: text
+        nullable: false
+      company:
+        type: text
+      email:
+        type: text
+      phone:
+        type: text
+      notes:
+        type: text
+      is_active:
+        type: boolean
+        default: true
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # HOLDINGS - Current investment positions
+  # ------------------------------------------------------------
+  holdings:
+    description: "Current holdings/positions in investment accounts"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      account_id:
+        type: uuid
+        foreign_key: investment_accounts(id)
+        on_delete: cascade
+      symbol:
+        type: text
+        nullable: false
+        description: "Stock/ETF/Fund ticker symbol"
+      security_name:
+        type: text
+      security_type:
+        type: text
+        enum: [Stock, ETF, Mutual Fund, Bond, GIC, Cash, Options, Crypto, Other]
+      quantity:
+        type: numeric(18,6)
+        nullable: false
+        default: 0
+      average_cost:
+        type: numeric(18,6)
+        default: 0
+        description: "Average cost per unit"
+      current_price:
+        type: numeric(18,6)
+        default: 0
+      market_value:
+        type: numeric(18,2)
+        default: 0
+      book_value:
+        type: numeric(18,2)
+        default: 0
+      currency:
+        type: text
+        default: "CAD"
+      unrealized_gain_loss:
+        type: numeric(18,2)
+        default: 0
+      unrealized_gain_loss_percent:
+        type: numeric(10,4)
+        default: 0
+      last_updated:
+        type: timestamp with time zone
+        default: now()
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # HOLDING_SNAPSHOTS - Historical holding values
+  # ------------------------------------------------------------
+  holding_snapshots:
+    description: "Point-in-time snapshots of holdings for historical tracking"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      account_id:
+        type: uuid
+        foreign_key: investment_accounts(id)
+        on_delete: cascade
+      snapshot_date:
+        type: date
+        nullable: false
+      symbol:
+        type: text
+        nullable: false
+      quantity:
+        type: numeric(18,6)
+      average_cost:
+        type: numeric(18,6)
+      current_price:
+        type: numeric(18,6)
+      market_value:
+        type: numeric(18,2)
+      book_value:
+        type: numeric(18,2)
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # INVESTMENT_TRANSACTIONS - Trades, dividends, contributions
+  # ------------------------------------------------------------
+  investment_transactions:
+    description: "Investment transactions (buys, sells, dividends, contributions, etc.)"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      account_id:
+        type: uuid
+        foreign_key: investment_accounts(id)
+        on_delete: cascade
+      transaction_date:
+        type: date
+        nullable: false
+      settlement_date:
+        type: date
+      transaction_type:
+        type: text
+        nullable: false
+        enum: [BUY, SELL, DIVIDEND, DISTRIBUTION, CONTRIBUTION, WITHDRAWAL, TRANSFER_IN, TRANSFER_OUT, FEE, INTEREST, REINVEST, SPLIT, ROC]
+      symbol:
+        type: text
+      security_name:
+        type: text
+      quantity:
+        type: numeric(18,6)
+      price:
+        type: numeric(18,6)
+      gross_amount:
+        type: numeric(18,2)
+        nullable: false
+      commission:
+        type: numeric(12,2)
+        default: 0
+      fees:
+        type: numeric(12,2)
+        default: 0
+      net_amount:
+        type: numeric(18,2)
+        nullable: false
+      currency:
+        type: text
+        default: "CAD"
+      exchange_rate:
+        type: numeric(12,6)
+        default: 1
+      description:
+        type: text
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # CASH_TRANSACTIONS - Cash movements in investment accounts
+  # ------------------------------------------------------------
+  cash_transactions:
+    description: "Cash transactions within investment accounts"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      account_id:
+        type: uuid
+        foreign_key: investment_accounts(id)
+        on_delete: cascade
+      transaction_date:
+        type: date
+        nullable: false
+      transaction_type:
+        type: text
+        nullable: false
+        enum: [DEPOSIT, WITHDRAWAL, INTEREST, FEE, TRANSFER]
+      amount:
+        type: numeric(18,2)
+        nullable: false
+      currency:
+        type: text
+        default: "CAD"
+      description:
+        type: text
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # TAX_WITHHOLDINGS - Tax withheld on investments
+  # ------------------------------------------------------------
+  tax_withholdings:
+    description: "Tax withholding records for investment income"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      account_id:
+        type: uuid
+        foreign_key: investment_accounts(id)
+        on_delete: cascade
+      transaction_id:
+        type: uuid
+        foreign_key: investment_transactions(id)
+        on_delete: cascade
+      withholding_date:
+        type: date
+        nullable: false
+      symbol:
+        type: text
+      withholding_amount:
+        type: numeric(15,2)
+        nullable: false
+      country:
+        type: text
+        nullable: false
+        description: "Country where tax was withheld"
+      income_type:
+        type: text
+        nullable: false
+        enum: [dividend, interest, capital_gain]
+      currency:
+        type: text
+        default: "CAD"
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+# ============================================================
+# PROPERTY & MORTGAGE TABLES
+# ============================================================
+
+  # ------------------------------------------------------------
+  # PROPERTIES - Real estate properties
+  # ------------------------------------------------------------
+  properties:
+    description: "Real estate properties owned by user"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      property_name:
+        type: text
+        nullable: false
+      property_type:
+        type: text
+        nullable: false
+        enum: [Primary Residence, Rental Property, Vacation Home, Investment Property, Land]
+      address:
+        type: text
+      purchase_date:
+        type: date
+        nullable: false
+      purchase_price:
+        type: numeric
+        nullable: false
+      down_payment:
+        type: numeric
+        nullable: false
+      land_transfer_tax:
+        type: numeric
+        default: 0
+      legal_fees:
+        type: numeric
+        default: 0
+      home_inspection:
+        type: numeric
+        default: 0
+      appraisal_fee:
+        type: numeric
+        default: 0
+      other_closing_costs:
+        type: numeric
+        default: 0
+      current_market_value:
+        type: numeric
+      property_tax_annual:
+        type: numeric
+      property_insurance_annual:
+        type: numeric
+        default: 0
+      hoa_monthly:
+        type: numeric
+        default: 0
+        description: "Monthly HOA/condo fees"
+      expected_monthly_rent:
+        type: numeric
+        default: 0
+        description: "Expected rental income if rental property"
+      is_primary_residence:
+        type: boolean
+        default: true
+      currency:
+        type: text
+        default: "'CAD'"
+        description: "Currency for property values (CAD, INR, USD, etc.)"
+      country:
+        type: text
+        default: "'CA'"
+        description: "Country where property is located (CA, IN, US, etc.)"
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # MORTGAGES - Mortgage loans
+  # ------------------------------------------------------------
+  mortgages:
+    description: "Mortgage loans linked to properties"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      property_id:
+        type: uuid
+        foreign_key: properties(id)
+        on_delete: cascade
+      mortgage_name:
+        type: text
+        nullable: false
+      mortgage_type:
+        type: text
+        nullable: false
+        enum: [First Mortgage, Second Mortgage, HELOC, Refinance]
+      original_loan_amount:
+        type: numeric
+        nullable: false
+      loan_date:
+        type: date
+        nullable: false
+      original_amortization_years:
+        type: integer
+        description: "Total amortization period in years (e.g., 25)"
+      current_balance:
+        type: numeric
+      currency:
+        type: text
+        default: "'CAD'"
+        description: "Currency for mortgage values (CAD, INR, USD, etc.)"
+      is_active:
+        type: boolean
+        default: true
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # MORTGAGE_TERMS - Individual mortgage terms (for renewals)
+  # ------------------------------------------------------------
+  mortgage_terms:
+    description: "Individual mortgage terms (supports renewals/refinancing)"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      mortgage_id:
+        type: uuid
+        foreign_key: mortgages(id)
+        on_delete: cascade
+      term_number:
+        type: integer
+        nullable: false
+        default: 1
+        description: "1 for first term, 2 for first renewal, etc."
+      lender:
+        type: text
+        nullable: false
+      interest_rate:
+        type: numeric
+        nullable: false
+      rate_type:
+        type: text
+        nullable: false
+        enum: [Fixed, Variable, Prime Plus, Prime Minus]
+      term_years:
+        type: integer
+        description: "Term length in years (e.g., 5)"
+      term_start_date:
+        type: date
+        nullable: false
+      term_end_date:
+        type: date
+      payment_frequency:
+        type: text
+        nullable: false
+        enum: [Monthly, Bi-Weekly, Accelerated Bi-Weekly, Weekly]
+        default: "Monthly"
+      regular_payment_amount:
+        type: numeric
+        description: "Regular payment amount per frequency"
+      minimum_payment_type:
+        type: text
+        enum: [principal_interest, interest_only]
+        default: "principal_interest"
+      renewal_type:
+        type: text
+        enum: [new, renewal, refinance, switch]
+      balance_at_term_start:
+        type: numeric
+      balance_at_term_end:
+        type: numeric
+      is_current_term:
+        type: boolean
+        default: true
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # MORTGAGE_PAYMENTS - Individual mortgage payments
+  # ------------------------------------------------------------
+  mortgage_payments:
+    description: "Individual mortgage payment records"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      mortgage_id:
+        type: uuid
+        foreign_key: mortgages(id)
+        on_delete: cascade
+      term_id:
+        type: uuid
+        foreign_key: mortgage_terms(id)
+        on_delete: cascade
+      payment_date:
+        type: date
+        nullable: false
+      payment_amount:
+        type: numeric
+        nullable: false
+      principal_amount:
+        type: numeric
+        nullable: false
+      interest_amount:
+        type: numeric
+        nullable: false
+      extra_principal:
+        type: numeric
+        default: 0
+        description: "Additional principal payment"
+      balance_after:
+        type: numeric
+        nullable: false
+      is_lump_sum:
+        type: boolean
+        default: false
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+# ============================================================
+# INSURANCE TABLES
+# ============================================================
+
+  # ------------------------------------------------------------
+  # INSURANCE_POLICIES - Life, health, property insurance
+  # ------------------------------------------------------------
+  insurance_policies:
+    description: "Insurance policies (life, health, property, etc.)"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      policy_name:
+        type: text
+        nullable: false
+      policy_number:
+        type: text
+      policy_type:
+        type: text
+        nullable: false
+        enum: [Term Life, Whole Life, ULIP, Endowment, Health, Critical Illness, Disability, Property, Auto, Umbrella, Travel]
+      insurance_company:
+        type: text
+        nullable: false
+      sum_assured:
+        type: numeric
+        description: "Death benefit/coverage amount"
+      maturity_amount:
+        type: numeric
+        description: "Maturity value (for endowment/ULIP)"
+      premium_amount:
+        type: numeric
+        nullable: false
+      premium_frequency:
+        type: text
+        nullable: false
+        enum: [Monthly, Quarterly, Semi-Annual, Annual, Single]
+      start_date:
+        type: date
+        nullable: false
+      end_date:
+        type: date
+      maturity_date:
+        type: date
+      policy_status:
+        type: text
+        default: "active"
+        enum: [active, lapsed, surrendered, matured, claim_paid]
+      surrender_value:
+        type: numeric
+        description: "Current surrender value"
+      loan_amount:
+        type: numeric
+        default: 0
+        description: "Any loan taken against policy"
+      agent_name:
+        type: text
+      agent_phone:
+        type: text
+      notes:
+        type: text
+      currency:
+        type: text
+        default: "INR"
+      country:
+        type: text
+        default: "IN"
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # INSURANCE_RIDERS - Additional riders on policies
+  # ------------------------------------------------------------
+  insurance_riders:
+    description: "Additional riders/add-ons on insurance policies"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      policy_id:
+        type: uuid
+        foreign_key: insurance_policies(id)
+        on_delete: cascade
+      rider_name:
+        type: text
+        nullable: false
+      rider_type:
+        type: text
+        enum: [Accidental Death, Critical Illness, Waiver of Premium, Income Benefit, Hospital Cash]
+      sum_assured:
+        type: numeric
+      premium_amount:
+        type: numeric
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # INSURANCE_NOMINEES - Policy beneficiaries
+  # ------------------------------------------------------------
+  insurance_nominees:
+    description: "Nominees/beneficiaries for insurance policies"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      policy_id:
+        type: uuid
+        foreign_key: insurance_policies(id)
+        on_delete: cascade
+      name:
+        type: text
+        nullable: false
+      relationship:
+        type: text
+        nullable: false
+      percentage:
+        type: numeric
+        default: 100
+      date_of_birth:
+        type: date
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # INSURANCE_PREMIUM_PAYMENTS - Premium payment history
+  # ------------------------------------------------------------
+  insurance_premium_payments:
+    description: "Premium payment records for insurance policies"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      policy_id:
+        type: uuid
+        foreign_key: insurance_policies(id)
+        on_delete: cascade
+      payment_date:
+        type: date
+        nullable: false
+      amount:
+        type: numeric
+        nullable: false
+      payment_mode:
+        type: text
+        enum: [Bank Transfer, Credit Card, Debit Card, Cheque, Auto Debit, Cash]
+      receipt_number:
+        type: text
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # INSURANCE_BONUS_HISTORY - Bonus accruals for LIC policies
+  # ------------------------------------------------------------
+  insurance_bonus_history:
+    description: "Bonus accrual history for participating insurance policies"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      policy_id:
+        type: uuid
+        foreign_key: insurance_policies(id)
+        on_delete: cascade
+      year:
+        type: integer
+        nullable: false
+      bonus_type:
+        type: text
+        enum: [Simple Reversionary, Final Additional, Terminal]
+      bonus_rate:
+        type: numeric
+        description: "Bonus rate per 1000 sum assured"
+      bonus_amount:
+        type: numeric
+        nullable: false
+      cumulative_bonus:
+        type: numeric
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+# ============================================================
+# LIABILITIES TABLES
+# ============================================================
+
+  # ------------------------------------------------------------
+  # LIABILITIES - All debts and loans
+  # ------------------------------------------------------------
+  liabilities:
+    description: "All liabilities/debts (loans, credit cards, mortgages excluded)"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+        nullable: false
+      name:
+        type: text
+        nullable: false
+        description: "Friendly name for the liability"
+      liability_type:
+        type: text
+        nullable: false
+        enum: [Car Loan, Student Loan, Personal Loan, Credit Card, Line of Credit, Mortgage, HELOC, Family Loan, Tax Owing, Other]
+      lender_name:
+        type: text
+        description: "Bank or lender name"
+      original_amount:
+        type: numeric(15,2)
+        description: "Original loan/debt amount"
+      current_balance:
+        type: numeric(15,2)
+        nullable: false
+        description: "Current outstanding balance"
+      interest_rate:
+        type: numeric(6,4)
+        description: "Annual interest rate as decimal (e.g., 0.0525 for 5.25%)"
+      rate_type:
+        type: text
+        enum: [Fixed, Variable, Prime Plus, Prime Minus]
+        default: "Fixed"
+      minimum_payment:
+        type: numeric(12,2)
+        description: "Minimum monthly payment"
+      payment_frequency:
+        type: text
+        enum: [Monthly, Bi-Weekly, Weekly]
+        default: "Monthly"
+      start_date:
+        type: date
+        description: "Loan start date"
+      end_date:
+        type: date
+        description: "Expected payoff date"
+      currency:
+        type: text
+        default: "CAD"
+      country:
+        type: text
+        default: "CA"
+      is_active:
+        type: boolean
+        default: true
+      is_revolving:
+        type: boolean
+        default: false
+        description: "True for credit cards and lines of credit"
+      credit_limit:
+        type: numeric(15,2)
+        description: "For revolving credit - max credit limit"
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+# ============================================================
+# USER & PROFILE TABLES
+# ============================================================
+
+  # ------------------------------------------------------------
+  # USER_PROFILE - User financial profile
+  # ------------------------------------------------------------
+  user_profile:
+    description: "User's financial profile and settings"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+        nullable: false
+        unique: true
+      date_of_birth:
+        type: date
+      province:
+        type: text
+        default: "ON"
+      country:
+        type: text
+        default: "CA"
+      marital_status:
+        type: text
+        enum: [single, married, common_law, divorced, widowed]
+      spouse_date_of_birth:
+        type: date
+      employment_status:
+        type: text
+        default: "employed"
+        enum: [employed, self_employed, retired, unemployed, student]
+      current_annual_income:
+        type: numeric(15,2)
+      spouse_annual_income:
+        type: numeric(15,2)
+      expected_retirement_age:
+        type: integer
+        default: 65
+      desired_retirement_income:
+        type: numeric(15,2)
+      life_expectancy:
+        type: integer
+        default: 90
+      marginal_tax_rate:
+        type: numeric(5,2)
+      average_tax_rate:
+        type: numeric(5,2)
+      rrsp_contribution_room:
+        type: numeric(15,2)
+      rrsp_unused_room:
+        type: numeric(15,2)
+      tfsa_contribution_room:
+        type: numeric(15,2)
+      risk_tolerance:
+        type: text
+        default: "moderate"
+        enum: [conservative, moderate, aggressive]
+      preferred_currency:
+        type: text
+        default: "CAD"
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # PROFILES - Auth user profiles
+  # ------------------------------------------------------------
+  profiles:
+    description: "User profile linked to auth.users"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      email:
+        type: text
+        unique: true
+      full_name:
+        type: text
+      role:
+        type: text
+        default: "user"
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # GOVERNMENT_BENEFITS - CPP, OAS, etc.
+  # ------------------------------------------------------------
+  government_benefits:
+    description: "Government benefit estimates (CPP, OAS, etc.)"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      benefit_type:
+        type: text
+        nullable: false
+        enum: [CPP, OAS, GIS, QPP]
+      estimated_monthly_amount:
+        type: numeric(10,2)
+      planned_start_age:
+        type: integer
+      is_for_spouse:
+        type: boolean
+        default: false
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+# ============================================================
+# SUBSCRIPTION & RECURRING TABLES
+# ============================================================
+
+  # ------------------------------------------------------------
+  # SUBSCRIPTIONS - Recurring subscriptions
+  # ------------------------------------------------------------
+  subscriptions:
+    description: "Recurring subscriptions (streaming, software, memberships)"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+        nullable: false
+      merchant_id:
+        type: uuid
+        foreign_key: merchant(id)
+        on_delete: cascade
+        nullable: false
+      friendly_name:
+        type: text
+        nullable: false
+      amount:
+        type: numeric(12,2)
+        nullable: false
+      currency:
+        type: text
+        default: "USD"
+      frequency:
+        type: text
+        nullable: false
+        enum: [weekly, monthly, quarterly, semi_annual, annual]
+      next_billing_date:
+        type: date
+      last_billing_date:
+        type: date
+      billing_day_of_month:
+        type: integer
+      is_active:
+        type: boolean
+        default: true
+      activated_at:
+        type: timestamp with time zone
+        default: now()
+      deactivated_at:
+        type: timestamp with time zone
+      description:
+        type: text
+      reminder_days_before:
+        type: integer
+        default: 3
+      auto_renew:
+        type: boolean
+        default: true
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # SUBSCRIPTION_HISTORY - Subscription changes
+  # ------------------------------------------------------------
+  subscription_history:
+    description: "History of subscription changes"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      subscription_id:
+        type: uuid
+        foreign_key: subscriptions(id)
+        on_delete: cascade
+        nullable: false
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+        nullable: false
+      action:
+        type: text
+        nullable: false
+        enum: [created, activated, deactivated, price_change, cancelled]
+      action_date:
+        type: timestamp with time zone
+        default: now()
+        nullable: false
+      reason:
+        type: text
+      notes:
+        type: text
+      old_value:
+        type: text
+      new_value:
+        type: text
+
+# ============================================================
+# BUDGETS & GOALS TABLES
+# ============================================================
+
+  # ------------------------------------------------------------
+  # BUDGETS - Category budgets
+  # ------------------------------------------------------------
+  budgets:
+    description: "Monthly/annual budgets by category"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      category_id:
+        type: uuid
+        foreign_key: category(id)
+      chart_of_account_id:
+        type: uuid
+        foreign_key: chart_of_accounts(id)
+      amount:
+        type: numeric(12,2)
+        nullable: false
+      period:
+        type: text
+        default: "monthly"
+        enum: [monthly, quarterly, annual]
+      year:
+        type: integer
+      month:
+        type: integer
+      is_active:
+        type: boolean
+        default: true
+      notes:
+        type: text
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # GOALS - Financial goals
+  # ------------------------------------------------------------
+  goals:
+    description: "Financial goals (savings targets, debt payoff, etc.)"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      name:
+        type: text
+        nullable: false
+      description:
+        type: text
+      target_amount:
+        type: numeric(15,2)
+        nullable: false
+      current_amount:
+        type: numeric(15,2)
+        default: 0
+      target_date:
+        type: date
+      priority:
+        type: integer
+        default: 1
+      status:
+        type: text
+        default: "in_progress"
+        enum: [not_started, in_progress, completed, paused, cancelled]
+      goal_type:
+        type: text
+        enum: [savings, debt_payoff, investment, emergency_fund, retirement, education, home, vacation, other]
+      linked_account_id:
+        type: uuid
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+# ============================================================
+# IMPORT & STAGING TABLES
+# ============================================================
+
+  # ------------------------------------------------------------
+  # IMPORT_STAGING - Temporary import staging
+  # ------------------------------------------------------------
+  import_staging:
+    description: "Staging table for transaction imports"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      import_batch_id:
+        type: uuid
+        description: "Groups imports from same file"
+      date:
+        type: date
+      description:
+        type: text
+      amount:
+        type: numeric(12,2)
+      account_id:
+        type: bigint
+      status:
+        type: text
+        default: "pending"
+        enum: [pending, matched, imported, error, duplicate]
+      matched_merchant_id:
+        type: uuid
+      error_message:
+        type: text
+      raw_data:
+        type: jsonb
+        description: "Original row data"
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # COLUMN_MAPPINGS - CSV column mappings
+  # ------------------------------------------------------------
+  column_mappings:
+    description: "Saved CSV column mappings for different banks"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      account_id:
+        type: bigint
+        foreign_key: accounts(id)
+        on_delete: cascade
+      mapping_name:
+        type: text
+        nullable: false
+        description: "e.g., 'TD Bank Visa'"
+      date_column:
+        type: text
+      description_column:
+        type: text
+      amount_column:
+        type: text
+      debit_column:
+        type: text
+      credit_column:
+        type: text
+      balance_column:
+        type: text
+      date_format:
+        type: text
+        default: "YYYY-MM-DD"
+      skip_rows:
+        type: integer
+        default: 0
+      is_default:
+        type: boolean
+        default: false
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  # ------------------------------------------------------------
+  # AI_EXTRACTION_LOGS - AI extraction history
+  # ------------------------------------------------------------
+  ai_extraction_logs:
+    description: "Logs of AI-powered data extraction attempts"
+    columns:
+      id:
+        type: uuid
+        primary_key: true
+        default: gen_random_uuid()
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      extraction_type:
+        type: text
+        enum: [investment_statement, bank_statement, receipt]
+      source_file:
+        type: text
+      status:
+        type: text
+        enum: [pending, processing, completed, failed]
+      result_data:
+        type: jsonb
+      error_message:
+        type: text
+      tokens_used:
+        type: integer
+      processing_time_ms:
+        type: integer
+      created_at:
+        type: timestamp with time zone
+        default: now()
+
+# ============================================================
+# VIEW TABLES (Materialized/Summary Views)
+# ============================================================
+
+views:
+  # ------------------------------------------------------------
+  # PORTFOLIO VIEWS - Investment portfolio summaries
+  # ------------------------------------------------------------
+  portfolio_by_institution:
+    description: "Portfolio totals grouped by institution"
+    columns:
+      user_id: uuid
+      institution: text
+      total_market_value: numeric
+      total_book_value: numeric
+      total_unrealized_gain: numeric
+      account_count: bigint
+
+  portfolio_by_account_type:
+    description: "Portfolio totals grouped by account type (TFSA, RRSP, etc.)"
+    columns:
+      user_id: uuid
+      account_type: text
+      total_market_value: numeric
+      total_book_value: numeric
+      total_unrealized_gain: numeric
+      account_count: bigint
+
+  portfolio_by_security_type:
+    description: "Portfolio totals grouped by security type (Stock, ETF, etc.)"
+    columns:
+      user_id: uuid
+      security_type: text
+      total_market_value: numeric
+      total_book_value: numeric
+      total_unrealized_gain: numeric
+      holdings_count: bigint
+
+  # ------------------------------------------------------------
+  # CASH FLOW VIEWS
+  # ------------------------------------------------------------
+  monthly_cash_flow:
+    description: "Monthly income vs expenses summary"
+    columns:
+      user_id: uuid
+      month: date
+      total_income: numeric
+      total_expenses: numeric
+      net_cash_flow: numeric
+      transaction_count: bigint
+
+  annual_cash_flow:
+    description: "Annual income vs expenses summary"
+    columns:
+      user_id: uuid
+      year: integer
+      total_income: numeric
+      total_expenses: numeric
+      net_cash_flow: numeric
+
+  expense_by_category:
+    description: "Expenses grouped by category"
+    columns:
+      user_id: uuid
+      month: date
+      category_name: text
+      total_amount: numeric
+      transaction_count: bigint
+      percent_of_total: numeric
+
+  income_by_source:
+    description: "Income grouped by source/category"
+    columns:
+      user_id: uuid
+      month: date
+      source_name: text
+      total_amount: numeric
+      transaction_count: bigint
+
+  # ------------------------------------------------------------
+  # MORTGAGE VIEWS
+  # ------------------------------------------------------------
+  v_mortgage_summary:
+    description: "Summary view of mortgages with payment totals"
+    columns:
+      id: uuid
+      user_id: uuid
+      mortgage_name: text
+      lender: text
+      mortgage_type: text
+      original_loan_amount: numeric
+      current_balance: numeric
+      interest_rate: numeric
+      payment_frequency: text
+      regular_payment_amount: numeric
+      property_name: text
+      total_principal_paid: numeric
+      total_interest_paid: numeric
+      payments_made: bigint
+
+  v_mortgage_with_current_term:
+    description: "Mortgage with current term details joined"
+    columns:
+      id: uuid
+      user_id: uuid
+      mortgage_name: text
+      mortgage_type: text
+      original_loan_amount: numeric
+      loan_date: date
+      original_amortization_years: integer
+      current_balance: numeric
+      is_active: boolean
+      property_name: text
+      address: text
+      term_number: integer
+      current_lender: text
+      current_rate: numeric
+      current_rate_type: text
+      term_start_date: date
+      term_end_date: date
+      payment_frequency: text
+      regular_payment_amount: numeric
+      minimum_payment_type: text
+
+  v_mortgage_history:
+    description: "Full mortgage term history"
+    columns:
+      mortgage_id: uuid
+      user_id: uuid
+      mortgage_name: text
+      mortgage_type: text
+      original_loan_amount: numeric
+      property_name: text
+      term_number: integer
+      lender: text
+      interest_rate: numeric
+      rate_type: text
+      term_years: integer
+      term_start_date: date
+      term_end_date: date
+      renewal_type: text
+      balance_at_term_start: numeric
+      balance_at_term_end: numeric
+      is_current_term: boolean
+
+  v_property_summary:
+    description: "Property summary with equity and mortgage counts"
+    columns:
+      id: uuid
+      user_id: uuid
+      property_name: text
+      property_type: text
+      address: text
+      purchase_date: date
+      purchase_price: numeric
+      current_market_value: numeric
+      estimated_equity: numeric
+      total_closing_costs: numeric
+      active_mortgages_count: bigint
+
+  # ------------------------------------------------------------
+  # LIABILITY VIEWS
+  # ------------------------------------------------------------
+  liability_summary:
+    description: "Liabilities grouped by type"
+    columns:
+      user_id: uuid
+      liability_type: text
+      total_balance: numeric
+      total_original_amount: numeric
+      avg_interest_rate: numeric
+      liability_count: bigint
+
+  # ------------------------------------------------------------
+  # RETIREMENT VIEWS
+  # ------------------------------------------------------------
+  retirement_summary:
+    description: "Retirement planning summary"
+    columns:
+      user_id: uuid
+      date_of_birth: date
+      current_age: integer
+      expected_retirement_age: integer
+      years_to_retirement: integer
+      current_annual_income: numeric(15,2)
+      desired_retirement_income: numeric(15,2)
+      risk_tolerance: text
+      rrsp_contribution_room: numeric(15,2)
+      tfsa_contribution_room: numeric(15,2)
+      cpp_at_65: numeric(10,2)
+      cpp_planned_start_age: integer
+      oas_estimated_monthly: numeric(10,2)
+      oas_planned_start_age: integer
+      has_employer_pension: boolean
+      pension_estimated_monthly: numeric(10,2)
+      total_monthly_benefits_at_65: numeric
+      total_annual_benefits_at_65: numeric
+
+  # ------------------------------------------------------------
+  # SPENDING VIEWS
+  # ------------------------------------------------------------
+  spending_personality:
+    description: "User spending pattern analysis"
+    columns:
+      user_id: uuid
+      category: text
+      total_spent: numeric
+      avg_monthly: numeric
+      percent_of_spending: numeric
+      spending_type: text
+
+  savings_rate_trend:
+    description: "Savings rate trends over time"
+    columns:
+      user_id: uuid
+      month: date
+      total_income: numeric
+      total_expenses: numeric
+      net_savings: numeric
+      savings_rate_percent: numeric
+      avg_income_3mo: numeric
+      avg_expenses_3mo: numeric
+      avg_savings_12mo: numeric
+
+# ============================================================
+# SUPPORTING/REFERENCE TABLES
+# ============================================================
+
+  providers:
+    description: "Financial service providers/institutions"
+    columns:
+      id:
+        type: bigint
+        primary_key: true
+        auto_increment: true
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      name:
+        type: text
+        nullable: false
+      country:
+        type: text
+        nullable: false
+      type:
+        type: text
+        nullable: false
+        enum: [bank, brokerage, insurance, mortgage_lender, other]
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  products:
+    description: "Financial products within accounts"
+    columns:
+      id:
+        type: bigint
+        primary_key: true
+        auto_increment: true
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+      account_id:
+        type: bigint
+        foreign_key: accounts(id)
+        on_delete: cascade
+      product_type:
+        type: text
+        nullable: false
+      product_name:
+        type: text
+        nullable: false
+      product_code:
+        type: text
+      quantity:
+        type: numeric
+        default: 0
+      purchase_price:
+        type: numeric
+        default: 0
+      current_price:
+        type: numeric
+        default: 0
+      purchase_date:
+        type: date
+      maturity_date:
+        type: date
+      created_at:
+        type: timestamp with time zone
+        default: now()
+      updated_at:
+        type: timestamp with time zone
+        default: now()
+
+  user_preferences:
+    description: "User preferences per merchant (split rules, etc.)"
+    columns:
+      user_id:
+        type: uuid
+        foreign_key: auth.users(id)
+        on_delete: cascade
+        primary_key: true
+      merchant_id:
+        type: uuid
+        foreign_key: merchant(id)
+        primary_key: true
+      preferred_split_json:
+        type: jsonb
+        description: "Saved split configuration"
+      auto_tag_enabled:
+        type: boolean
+        default: true
+
+# ============================================================
+# RELATIONSHIPS SUMMARY
+# ============================================================
+
+relationships:
+  user_centric:
+    description: "All main tables link to auth.users via user_id"
+    tables:
+      - accounts
+      - transactions
+      - category
+      - chart_of_accounts
+      - merchant
+      - investment_accounts
+      - holdings
+      - investment_transactions
+      - properties
+      - mortgages
+      - insurance_policies
+      - liabilities
+      - user_profile
+      - budgets
+      - goals
+      - subscriptions
+
+  investment_hierarchy:
+    description: "Investment data hierarchy"
+    flow: "user -> investment_accounts -> holdings/investment_transactions -> holding_snapshots"
+
+  property_hierarchy:
+    description: "Property and mortgage hierarchy"
+    flow: "user -> properties -> mortgages -> mortgage_terms -> mortgage_payments"
+
+  insurance_hierarchy:
+    description: "Insurance data hierarchy"
+    flow: "user -> insurance_policies -> [insurance_riders, insurance_nominees, insurance_premium_payments, insurance_bonus_history]"
+
+  transaction_categorization:
+    description: "Transaction categorization chain"
+    flow: "transactions -> normalized_merchant_id -> merchant -> chart_of_account_id/category_id"
+    rules:
+      - "description_rules matches raw_merchant_name to merchant"
+      - "merchant has default chart_of_account_id for auto-categorization"
+      - "transaction_split allows splitting across multiple chart_of_accounts"
+
+# ============================================================
+# NOTES FOR AI USAGE
+# ============================================================
+
+ai_usage_notes:
+  country_support:
+    description: "Multi-country support (Canada and India primarily)"
+    canada_specific:
+      - "TFSA, RRSP, RRIF, LIRA account types"
+      - "CPP, OAS government benefits"
+      - "CAD currency default"
+    india_specific:
+      - "NPS, PPF, EPF, FD account types"
+      - "LIC/ULIP insurance policies with bonus tracking"
+      - "INR currency"
+
+  chart_of_accounts:
+    description: "Income/Expense classification system"
+    purpose: "Provides consistent categorization for financial reporting"
+    types:
+      - income: "Revenue sources (salary, dividends, rental income)"
+      - expense: "Spending categories (groceries, utilities, entertainment)"
+      - asset: "Things owned (cash, investments, property)"
+      - liability: "Debts owed (loans, credit cards)"
+      - equity: "Net worth"
+
+  mortgage_terms:
+    description: "Supports Canadian mortgage renewal model"
+    pattern: "Mortgages have multiple terms (typically 5 years) over the amortization period (25-30 years)"
+    heloc_special: "HELOC types have different handling - no fixed term end, Prime +/- rates"
+
+  transaction_workflow:
+    description: "Transaction import and categorization flow"
+    steps:
+      - "1. Import raw transactions (CSV, PDF extraction)"
+      - "2. Match raw_merchant_name to merchant via description_rules"
+      - "3. Auto-assign chart_of_account_id from merchant default"
+      - "4. User can split transactions across multiple categories"
+      - "5. Status changes from pending_merchant_mapping to categorized"

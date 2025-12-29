@@ -41,6 +41,7 @@ export const ImportMapper = () => {
         { key: 'date', label: 'Date *', required: true },
         { key: 'description', label: 'Description *', required: true },
         { key: 'amount', label: 'Amount *', required: true },
+        { key: 'cr_dr', label: 'CR/DR Column (CREDIT/DEBIT)', required: false },
         { key: 'type', label: 'Transaction Type', required: false },
         { key: 'memo', label: 'Memo', required: false },
         { key: 'currency', label: 'Currency', required: false },
@@ -172,6 +173,13 @@ export const ImportMapper = () => {
                 }
             }
 
+            // CR/DR column detection (CREDIT/DEBIT indicator)
+            if ((colLower === 'cr/dr' || colLower === 'cr_dr' || colLower === 'crdr' ||
+                colLower === 'cr / dr' || colLower === 'credit/debit' ||
+                colLower === 'transaction type' || colLower === 'dr/cr') && !mappings.cr_dr) {
+                mappings.cr_dr = col;
+            }
+
             // Type detection
             if ((colLower.includes('type') || colLower.includes('transaction type')) && !mappings.type) {
                 mappings.type = col;
@@ -257,7 +265,24 @@ export const ImportMapper = () => {
                 // Parse amount
                 if (mapped.amount) {
                     const cleanAmount = String(mapped.amount).replace(/[$,]/g, '');
-                    mapped.amount = parseFloat(cleanAmount) || 0;
+                    let parsedAmount = parseFloat(cleanAmount) || 0;
+
+                    // If CR/DR column is mapped, use absolute amount and determine type from CR/DR
+                    if (mapped.cr_dr) {
+                        const crDrValue = String(mapped.cr_dr).toUpperCase().trim();
+                        parsedAmount = Math.abs(parsedAmount);
+
+                        // Set type based on CR/DR column value
+                        if (crDrValue === 'CREDIT' || crDrValue === 'CR' || crDrValue === 'C') {
+                            mapped.type = 'credit';
+                        } else if (crDrValue === 'DEBIT' || crDrValue === 'DR' || crDrValue === 'D') {
+                            mapped.type = 'debit';
+                        }
+                        // Clear the cr_dr field as it's not a transaction field
+                        delete mapped.cr_dr;
+                    }
+
+                    mapped.amount = parsedAmount;
                 }
 
                 // Parse date - handle various formats based on user selection
@@ -333,6 +358,19 @@ export const ImportMapper = () => {
                 }
 
                 // Set defaults
+                // Normalize type to lowercase and handle CREDIT/DEBIT values
+                let finalType = mapped.type;
+                if (finalType) {
+                    const typeUpper = String(finalType).toUpperCase().trim();
+                    if (typeUpper === 'CREDIT' || typeUpper === 'CR' || typeUpper === 'C') {
+                        finalType = 'credit';
+                    } else if (typeUpper === 'DEBIT' || typeUpper === 'DR' || typeUpper === 'D') {
+                        finalType = 'debit';
+                    } else {
+                        finalType = finalType.toLowerCase();
+                    }
+                }
+
                 return {
                     account_id: accountId,
                     date: mapped.date || new Date().toISOString().split('T')[0],
@@ -340,7 +378,7 @@ export const ImportMapper = () => {
                     description: mapped.description || 'Unknown',
                     amount: mapped.amount || 0,
                     currency: mapped.currency || 'CAD',
-                    type: mapped.type || (mapped.amount >= 0 ? 'credit' : 'debit'),
+                    type: finalType || (mapped.amount >= 0 ? 'credit' : 'debit'),
                     memo: mapped.memo || '',
                     chart_of_account_id: suspenseAccount?.id,
                     status: 'uncategorized',

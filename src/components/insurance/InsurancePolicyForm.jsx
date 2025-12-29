@@ -688,7 +688,7 @@ const InsurancePolicyForm = ({ policy, onClose }) => {
                                             onChange={handleChange}
                                             className={`w-full border rounded-lg px-3 py-2 ${errors.premium_amount ? 'border-red-500' : ''}`}
                                             min="0"
-                                            step="100"
+                                            step="any"
                                         />
                                         {errors.premium_amount && (
                                             <p className="text-red-500 text-xs mt-1">{errors.premium_amount}</p>
